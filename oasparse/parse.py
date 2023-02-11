@@ -180,13 +180,6 @@ for r in sorted(
             .to(gremlin_obj)
         )
 
-    # if len(stack) == 1:
-    #     raise Exception('done')
-    # curr_ptr = stack[-1]
-    # parent_ptr = stack[-2]
-    # print(f'DELTA: "{delta}"')
-    # print(delta)
-
 target_frag = 'reference-object.target'
 for src, dest in refs.items():
     rdf_g.add((
@@ -200,16 +193,12 @@ for src, dest in refs.items():
         .to(gremlin_nodes[dest])
     )
 
-# print(rdf_g.serialize(format="turtle"))
-# print('\n\n'.join(ann))
-# pprint([r for r in result.output('basic')['annotations']])
 gremlins = []
 for v in gremlin_g.V():#.properties('loc'):
     location = next(gremlin_g.V(v).properties().value())
     otype = ' '.join(v.label.split('-')[:-1]).title()
     if otype == 'Openapi':
         otype = 'OpenAPI'
-    # l = len(v.label)
     l = len(otype)
     tabs = '\t'
     if l < 7:
