@@ -1,0 +1,338 @@
+* output in form of URIs with JSON Pointer fragments to object types?
+    * Use RDF (triples, turtle, json-ld)
+    * load documetns with base URIs/IRIs
+    * document IRIs for literals?
+    * using JSON Pointer fragments in literal IRIs allows non-RDF usage, I think
+
+* This test suite as a _foundation_ for further testing?
+    * Test acceptance of valid data
+    * Craft test data that facilitates testing how tools handle the data?  What does this mean?
+    * Do we include API message data or other things for those further test suites?
+    * Is there a way for vendors to register how they test further?
+
+* How do various tools experience/detect/report various sorts of errors?
+    * Failing JSON Schema validation is easy
+    * No guarantee that all tools do the same amount of processing
+    * Some processing is under-specified
+
+* Layered testing
+    * Linting as a compliance level
+    * Ingesting is a common level
+    * But note that spec generators are also implementations
+
+* Business value
+    * I did not know this was a scenario we needed to support
+    * I did not know this was a legal but nonsensical scenario (what should I do with it?)
+    * I did not know this illegal scenario evades the JSON Schema
+
+* Reporting results
+    * Do you get errors at the appropriate time for error cases
+    * Can you ingest all cases?
+    * Can you render, generate, or otherwise use all cases? (and do they make sense?)
+    * Do you properly handle OAS documents that are out of scope for your tool?
+
+* Parse to an in-memory representation (=> RDF)
+    * $ref handling, some of which MUST be lazy (but some tools don't support)
+    * discriminator name and other indirect reference handling (can't remove components)
+    * further in-memory pre-processing such as inheritance/overriding
+    * this further pre-processing is where semantic errors are likely detected and handled
+    * Some tools may do additional in-memory processing compatible with but beyond the spec
+* Basic tests defined in terms of that in-memory representation
+* Should not require a literally standardized in-memory representation
+* Some tests go from basic in-meeory to dereferenced in-memory?
+* In-memory validation MAY be checked for semantic reasonableness
+* Additional tests should test from in-memory OAD and data representations to in-memory output representation
+
+* Can compare to almost-in-memory representation (excepting only cyclic refs?)
+    * MUST IGNOREs removed?
+    * Inheritance and overrides applied?
+    * What else?
+    * Many OAS documents, and most of all docs, will not impact this
+
+
+If goal is to give vendors _useful_ OAS documents that are guaranteed
+to be correct and expected to be handled, then organizing by API desing
+use case is probably better than a typical set of tests for parsing
+individual fields.  e.g.:
+    * Can handle an API that uses OPTIONS
+    * Can handle file uploads
+    * Can handle matrix parameters
+etc.  There might be many individual cases here, but top level is design-driven
+
+What sort of diagnostic information will vendors want?
+    * Do we need to isolate errors?  At least somewhat?
+    * realistic-but-focused vs maximal covering all the things
+
+* YAML vs JSON parsing
+    * YAML and JSON parsing outside of scope
+    * possibly should test handling of a YAML/JSON parse error?  Low priority if at all
+    * auto-generate JSON from YAML (or other way around if preferred)
+    * YAML empty object easy to mis-write as null
+    * Easy to accidentally write response code keys as numbers instead of strings
+
+* Iterative publication of test suite
+    * Start getting _something_ out so that vendors can start using it & feedback
+    * Get high-value cases out quickly - likely to be used but not quite typical
+    * Ideally partner with a vendor or two of different sorts for feedback
+
+* Determine reference parsing expectations
+    * references resolved or just parsed?
+    * reference removal outside of Schema Object?
+    * loading multiple documents?
+    * do we need test variations without references?
+    * references to wrong components location
+    * references to the wrong type outside of components?
+        * reference to external file/resource?
+        * internal reference to point of use?
+        * wrong by schema validation or other criteria?
+
+* Determine unspecified limits
+    * strings, lists, maps, urls, examples
+    * maximum lengths/sizes/etc
+    * non-API url schemes and syntax variations, where relevant
+
+* Determine testing of defaulting behavior
+* Determine expectations of syntactically valid fields with undefined behavior
+* Determine handling of MUST/SHOULD violations by the OAS document author
+* Determine handling expectations of ignored MAYs/SHOULDs/RECOMMENDEDs
+* Does URL always mean URL or really URL-reference?
+
+* Determine string testing needs: parsing vs also rendering
+    * TBD: Understand exactly what JSON parsers do and don't do for this
+    * parsing; escaped control characters (are these always technically valid?)
+    * parsing: unescaped basic plane non-ascii characters
+    * parsing: unescaped non-basic plane
+    * parsing: escaped non-ascii basic plane (6 character escapes)
+    * parsing: escaped non-basic plane (12 character escapes)
+    * parsing: RFC 8259 §8.2 allows non-unicode such as truncted UTF-16, do we need?
+    * rendering: CJK 
+    * rendering: right-to-left
+    * rendering: vertical
+
+* URL testing
+    * API URLs only allow HTTP and HTTPS (verify this- what about websockets?)
+    * Non-API URLs should test other schemes and syntaxes (e.g. tel)
+
+* Determine extent of possible JSON Schema Test Suite leveraging
+    * many cases usable as-is
+    * some cases easily excluded
+    * additional cases needed, could be added in same format
+    * possible automated production of otherwise normal-looking draft4openapi test suite
+
+* Isolated parsing positive test cases
+    * easy to isolate errors related to specific fields
+    * requires a lot of separate cases
+    * rarely look like realistic data
+    * strategy: identify minimal valid OAS documents and add individual fields for each case
+
+* Difficult content scenarios
+    * proper use of extended "format"
+
+* Positive test cases as examples
+    * what classes of APIs show up?
+    * are there patterns of variation?
+    * what assumptions might a tool make?
+    * challenges for strict vs loose typing?
+
+Is it possible to have a "maximal" document that uses all fields in a correct and reasonable way?
+This could be used as the basis for negative tests; alternative is building from minimal.
+Some fields/objects mutually exclusive but could probably be used across different pathskjjjjjjjjj
+
+Tasks:
+    * Identify under-specified fields
+    * Define testable limits and/or allow vendors to supply limits
+    * Create test driver annotations and implement a trivial vocabulary in jschon
+    * Might want to draw a graph of all of the Objects
+    * similar to http://openapi-map.apihandyman.io/ but showing cycles
+
+Possible tools:
+    * singer.io taps -> targets moving json data around
+
+Test driver schema vocabulary:
+    * testMaxLength, etc. (correlations with hard limits to also test)
+    * testCommonLength, etc. (what to use by default)
+    * test data values? good for combinatorics?  how to only do test-case-useful combinations?
+    * rather than generating data, start from maximal OAS file and mess with it?
+
+Referencing:
+    * base URL for API (do we ever need to do this in parsing?)
+    * base URI for "$ref" (everywhere) base on retrieval URI
+    * test for literal retrieval URI (file:// or https://?  Might need to research implementations)
+    * test for manually set base URI (if desirable - not part of spec)
+    * Use case: multiple specs may live under different version directories?  (idea unclear)
+
+Idea: write a generator for negative test cases leveraging the JSON Schema if it is solid enough
+
+There's something to look at in interplay between "base" server path and paths object "relative" paths
+
+Need universal test cases for certain fields
+    * string length limitations
+    * CommonMark usage vs non-usage
+    * URI/URL cases, scheme variations- where are non-HTTP(S) schemes reasonable?
+    * AFAIK path template variables are URI-syntax-blind, might have implications
+    * non-`x-`-prefixed "extensions"
+
+OpenAPI Object
+    openapi, info, and paths required
+    servers have defaulting behavior
+    security can allow an empty object in the array, with special behavior
+    tags field has ordering implications, but not all tags need be declared
+    external docs has referencing implications
+
+Info Object
+    title and version required
+    termsOfService is a URL - how complex to get with that?
+    description trivial, others are ojbects
+
+Contact Object
+    all optional strings
+    one `url` field, one `email` field
+    how far to go to test email?
+    url field - not just http(s) but tel, mailto, possibly others
+    set url and email to same email using mailto for URL?
+
+License Object
+    name required, url not
+    url as something weird like urn?
+
+Server Object
+    only `url` required
+    what if trailing slash on url
+    what if server variable provides trailing slash on url
+    `description` trivial (usual long-string CommonMark-enabled cases)
+    server variables are a special URL template resolution thing
+
+Server Variable Object
+    only `default` required
+    `description` trivial (usual long-string CommonMark-enabled cases)
+    `enum` SHOULD NOT be empty if present - what are cases for SHOULD NOT?
+
+Components Object
+    note that there is a regex for keys in each sub-obj
+    test for mis-filed components?
+
+Paths Object
+    leading slash requirement
+    what if trailing slash in servers
+    matching order test cases
+    might be a good place to test behavior - filling of URI templates
+    worth testing matching precedence?
+    negative tests for impossible/ambiguious matching?
+
+Path Item Object
+    has special "$ref" treatment in 3.0, with undefined behavior in overlaps
+    servers and parameters have complex interactions at other levels
+    rarely-used HTTP methods might be interesting
+
+Operation Object
+    note that some syntactically valid values won't make sense depending on http method
+    test for uniqueness of operationId, and handling of non-uniqueness
+
+External Documentation Object
+    url "MUST be in the format of a URL" (or URL-reference?
+
+Parameter Object
+    spend tons of effort here, there are so many possibilities
+    might be a good place to test behavior - generation of parameter strings
+    complex conditionals not all can be caught by schema validation
+    note that certain headers are valid to specify but SHALL be ignored
+    allowReserved seems tricky
+    example allows escaping non-representable data, but what are the expectations?
+
+Request Body Object
+    fairly straightforward
+    don't forget media type wildcarding
+    don't forget media type ranges
+
+Media Type Object
+    example interaction between this object and Schema Object
+    file upload support
+    multipart/form-data support
+    application/x-www-form-urlencoded support
+
+Encoding Object
+    as with parameters, there is a lot of complexity
+    this area is much less well-understood by most users
+    some use cases are very high-value; this combination makes testing critical
+
+Responses Object
+    in YAML it is easy to accidentally use numeric values as keys
+
+Response Object
+    don't forget media type ranges
+    links names are constrained similar to components
+
+Callback Object
+    note use of runtime expressions
+    error handling of runtime variables that don't go anywhere?
+    note that Path Items nest here- infinite nesting with callbacks in nested path itmes?
+
+Example Object
+    externalValue is a non-$ref reference, can point to non-JSON/YAML
+    unclear how non-JSON externalValue meets expectation of valid against schema (format?)
+
+Link Object
+    runtime expressions
+    potentially very complex, probably not incredibly well-understood area
+    lots of opportunity for relationally nonsensical declarations
+    server interaction is something I did not expect
+
+Reference Object
+    test ignoring adjacent fields
+    test same-document reference - fragment-only reference
+    test same-document reference - relative non-fragment-only reference
+    test same-document reference - full URI
+    test empty string reference (pathological same-document)?
+    test relative reference to another document
+    test full URI reference to another document
+
+Schema Object
+    needs filter/modification of JSON Schema test suite
+    note that `"default"` values MUST be valid according to local schema object
+    MUST NOT have both "readOnly" and "writeOnlY" set to true
+    
+Composition and Inheritance
+    "allOf" composition alone does not imply hierarchy (test re-ordering branches?)
+
+Discriminator Object
+    rely on components/schemas name
+    test case sensitivity of components/schemas name
+    test with allOf, oneOf, anyOf
+    test without any of the *Ofs
+    Note that making the discriminator field "required" has ambiguous guidance
+    Mentions "if explicit mapping is not possible" - is there a reason other than name mismatch?
+    test that inline subschemas
+    mappings - total vs mixed (some implicit, some explicit)
+    mappings - require same variations as "$ref" (same-document, base URI, external)
+    Unclear: "Mapping keys MUST be string values, but tooling MAY convert response values to strings for comparison."
+    Test short-circuting "anyOf" if we test behavior
+    There is unclear MAY wording for other short-circuiting (note - no annotations in 3.0.3)
+    "discriminator" in parent- wtf how does this work?
+    What are the error cases here?
+        How much is the implementation expected to detect?
+        There are several SHOULDs and MAYs that can get complicated
+        Requirement around discriminator field being "required" might be ambiguous
+
+XML Object
+    quite a few conditions here, also what are implementations expected to actually do with this?
+    prefix/name interaction
+    inside vs outside "items" / alongside "type", with "wrapped" interaction
+
+Security Scheme Object
+    some complex dependencies
+    there's a SHOULD about things being from an IANA registry
+    openIdConnectUrl - again, is this really URL or URL-reference?
+
+OAuth Flows Object
+    straightforward except for extensions
+
+OAuth Flow Object
+    complex dependencies on what was specified higher up
+
+Security Requirement Object
+    some implicit referencing happening here
+    [TBD: some complexity]
+
+
+
+

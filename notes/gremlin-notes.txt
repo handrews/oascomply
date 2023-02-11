@@ -1,0 +1,6 @@
+# Console queries worth remembering
+
+:> g.V().groupCount().by(label).unfold()
+:> g.V().groupCount().by(label).unfold().project('Entity Type','Count').by(keys).by(values)
+
+:> g.V().not(hasLabel('schema-object')).not(hasLabel('reference-object')).outE().groupCount().by(label).unfold().where(select(values).is(gt(1)))
