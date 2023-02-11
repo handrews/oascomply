@@ -1,0 +1,148 @@
+# Somewhat modified early petstore graph
+
+@prefix oas: <https://spec.openapis.org/oas/v3.0.3#> .
+@prefix content: <https://spec.openapis.org/oas/v3.0.3#response-object.content.> .
+@prefix document: <https://example.com/oad#/> .
+@prefix documentSchemas: <https://example.com/oad#/components/schemas/> .
+
+<https://example.com/oad#> a oas:openapi-object ;
+    oas:openapi-object.components document:components ;
+    oas:openapi-object.info document:info ;
+    oas:openapi-object.paths document:paths ;
+    oas:openapi-object.servers.0 document:servers/0 .
+
+document:components a oas:components-object ;
+    oas:components-object.schemas.Error documentSchemas:Error ;
+    oas:components-object.schemas.Pet documentSchemas:Pet ;
+    oas:components-object.schemas.Pets documentSchemas:Pets .
+
+documentSchemas:Error/properties/code a oas:schema-object .
+
+documentSchemas:Error/properties/message a oas:schema-object .
+
+documentSchemas:Pet/properties/id a oas:schema-object .
+
+documentSchemas:Pet/properties/name a oas:schema-object .
+
+documentSchemas:Pet/properties/tag a oas:schema-object .
+
+documentSchemas:Pets/items a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Pet .
+
+document:info a oas:info-object ;
+    oas:info-object.license document:info/license .
+
+document:info/license a oas:license-object .
+
+document:paths a oas:paths-object ;
+    oas:path-item document:paths/~1pets ;
+    oas:path-item document:paths/~1pets~1%7BpetId%7D .
+
+document:paths/~1pets a oas:path-item-object ;
+    oas:path-item-object.get document:paths/~1pets/get ;
+    oas:path-item-object.post document:paths/~1pets/post .
+
+document:paths/~1pets/get a oas:operation-object ;
+    oas:operation-object.parameters.0 document:paths/~1pets/get/parameters/0 ;
+    oas:operation-object.responses document:paths/~1pets/get/responses .
+
+document:paths/~1pets/get/parameters/0 a oas:parameter-object ;
+    oas:parameter-object.schema document:paths/~1pets/get/parameters/0/schema .
+
+document:paths/~1pets/get/parameters/0/schema a oas:schema-object .
+
+document:paths/~1pets/get/responses a oas:responses-object ;
+    oas:responses-object.200 document:paths/~1pets/get/responses/200 ;
+    oas:responses-object.default document:paths/~1pets/get/responses/default .
+
+document:paths/~1pets/get/responses/200 a oas:response-object ;
+    content:application/json document:paths/~1pets/get/responses/200/content/application~1json ;
+    oas:response-object.headers.x-next document:paths/~1pets/get/responses/200/headers/x-next .
+
+document:paths/~1pets/get/responses/200/content/application~1json a oas:media-type-object ;
+    oas:parameter-object.schema document:paths/~1pets/get/responses/200/content/application~1json/schema .
+
+document:paths/~1pets/get/responses/200/content/application~1json/schema a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Pets .
+
+document:paths/~1pets/get/responses/200/headers/x-next a oas:header-object ;
+    oas:parameter-object.schema document:paths/~1pets/get/responses/200/headers/x-next/schema .
+
+document:paths/~1pets/get/responses/200/headers/x-next/schema a oas:schema-object .
+
+document:paths/~1pets/get/responses/default a oas:response-object ;
+    content:application/json document:paths/~1pets/get/responses/default/content/application~1json .
+
+document:paths/~1pets/get/responses/default/content/application~1json a oas:media-type-object ;
+    oas:parameter-object.schema document:paths/~1pets/get/responses/default/content/application~1json/schema .
+
+document:paths/~1pets/get/responses/default/content/application~1json/schema a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Error .
+
+document:paths/~1pets/post a oas:operation-object ;
+    oas:operation-object.responses document:paths/~1pets/post/responses .
+
+document:paths/~1pets/post/responses a oas:responses-object ;
+    oas:responses-object.201 document:paths/~1pets/post/responses/201 ;
+    oas:responses-object.default document:paths/~1pets/post/responses/default .
+
+document:paths/~1pets/post/responses/201 a oas:response-object .
+
+document:paths/~1pets/post/responses/default a oas:response-object ;
+    content:application/json document:paths/~1pets/post/responses/default/content/application~1json .
+
+document:paths/~1pets/post/responses/default/content/application~1json a oas:media-type-object ;
+    oas:parameter-object.schema document:paths/~1pets/post/responses/default/content/application~1json/schema .
+
+document:paths/~1pets/post/responses/default/content/application~1json/schema a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Error .
+
+document:paths/~1pets~1%7BpetId%7D a oas:path-item-object ;
+    oas:path-item-object.get document:paths/~1pets~1%7BpetId%7D/get .
+
+document:paths/~1pets~1%7BpetId%7D/get a oas:operation-object ;
+    oas:operation-object.parameters.0 document:paths/~1pets~1%7BpetId%7D/get/parameters/0 ;
+    oas:operation-object.responses document:paths/~1pets~1%7BpetId%7D/get/responses .
+
+document:paths/~1pets~1%7BpetId%7D/get/parameters/0 a oas:parameter-object ;
+    oas:parameter-object.schema document:paths/~1pets~1%7BpetId%7D/get/parameters/0/schema .
+
+document:paths/~1pets~1%7BpetId%7D/get/parameters/0/schema a oas:schema-object .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses a oas:responses-object ;
+    oas:responses-object.200 document:paths/~1pets~1%7BpetId%7D/get/responses/200 ;
+    oas:responses-object.default document:paths/~1pets~1%7BpetId%7D/get/responses/default .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/200 a oas:response-object ;
+    content:application/json document:paths/~1pets~1%7BpetId%7D/get/responses/200/content/application~1json .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/200/content/application~1json a oas:media-type-object ;
+    oas:parameter-object.schema document:paths/~1pets~1%7BpetId%7D/get/responses/200/content/application~1json/schema .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/200/content/application~1json/schema a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Pet .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/default a oas:response-object ;
+    content:application/json document:paths/~1pets~1%7BpetId%7D/get/responses/default/content/application~1json .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/default/content/application~1json a oas:media-type-object ;
+    oas:parameter-object.schema document:paths/~1pets~1%7BpetId%7D/get/responses/default/content/application~1json/schema .
+
+document:paths/~1pets~1%7BpetId%7D/get/responses/default/content/application~1json/schema a oas:reference-object ;
+    oas:reference-object.target documentSchemas:Error .
+
+document:servers/0 a oas:server-object .
+
+documentSchemas:Pets a oas:schema-object ;
+    oas:schema-object.items documentSchemas:Pets/items> .
+
+documentSchemas:Pet a oas:schema-object ;
+    oas:schema-object.properties.id documentSchemas:Pet/properties/id> ;
+    oas:schema-object.properties.name documentSchemas:Pet/properties/name> ;
+    oas:schema-object.properties.tag documentSchemas:Pet/properties/tag> .
+
+documentSchemas:Error a oas:schema-object ;
+    oas:schema-object.properties.code documentSchemas:Error/properties/code> ;
+    oas:schema-object.properties.message documentSchemas:Error/properties/message> .
+
+
