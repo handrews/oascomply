@@ -1,0 +1,16 @@
+{
+    "title": "JSON Schema 2020-12 Semantic Web Model Reference Vocabulary",
+    "$id": "https://example.com/reference/meta/2020-12/modelref",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$vocabulary": {
+        "https://json-schema.org/draft/2020-12/vocab/core": true,
+        "https://example.com/reference/vocab/2020-12/modelref": true
+    },
+    "$dynamicAnchor": "meta",
+
+    "properties": {
+        "@modelReference": {
+            "type": "string"
+        }
+    }
+}

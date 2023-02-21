@@ -1,0 +1,19 @@
+{
+    "$schema": "https://example.com/reference/dialect/2020-12/modelref",
+    "$id": "https://example.com/schemas/ypr",
+    "description": "GeoPose YPR angles",
+
+    "@modelReference": "geopose.context.jsonld",
+    "type": "object",
+    "properties": {
+        "yaw": {
+            "type": "number"
+        },
+        "pitch": {
+            "type": "number"
+        },
+        "roll": {
+            "type": "number"
+        }
+    }
+}
