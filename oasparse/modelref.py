@@ -25,6 +25,14 @@ INSTANCE_DIR = os.path.join(LOCAL_DIR, '..', 'instances')
 
 DOCUMENT_BASE_URI = 'https://example.com/'
 
+# These keywords use annotations for internal communcation,
+# which is usually not of interest to end users.
+INTERNAL_ANNOTATIONS = (
+    'properties', 'patternProperties', 'additionalProperties',
+    'unevaluatedProperties', 'unevaluatedItems', 'if',
+    'prefixItems', 'items', 'contains', 'minContains', 'maxContains',
+)
+
 class InMemorySource(jschon.catalog.Source):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -68,10 +76,6 @@ class Parser:
         self,
         instance_name,
         instance_base_uri=DOCUMENT_BASE_URI,
-        use_rdf=True,
-        rdf_format='json-ld',
-        type_filter=(),
-        clear_storage=True,
     ):
         self._instance_name = instance_name
         self._instance = None
@@ -88,35 +92,9 @@ class Parser:
         # lets us know that jschon has been set up properly.
         self._jschon_catalog = None
 
-        # Initialize the stack with the root pointer, which is never popped.
-        self._stack = [JSONPointer('')]
-        self._seen = {}
-        self._refs = {}
-
-        self._oastypes = {}
-        self._type_filter = type_filter
-        self._filtered = []
-
-        # If we are using a persistant data store, should we clear it?
-        self._clear_storage = clear_storage
-
-        self._use_rdf = use_rdf
-        self._rdf_g = None
-        self._rdf_nodes = {}
-
-    def __enter__(self):
-        if self._use_rdf:
-            self._rdf_g = rdflib.Graph()
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
-
     def parse(self):
         # TODO: Are we likely to re-invoke parse()?  Why?
         #       Is there a reason to not just parse on instantiation?
-        #       Would we re-parse into different graphs?
-        #       Serialize the parsed graph different ways?
         if not self._instance:
             self._instance = self._load_instance()
 
@@ -126,18 +104,11 @@ class Parser:
         self._schema_output = self._evaluate_instance()
         return
 
-        for r in sorted(
-            self._schema_output['annotations'],
-            key=lambda a: a['instanceLocation']
-        ):
-            akl = r['absoluteKeywordLocation']
-            if akl.endswith('/oasType'):
-                self._handle_oastype(r)
-
-        self._link_references()
-
     def _load_instance(self):
-        instance_file = os.path.join(INSTANCE_DIR, f'{self._instance_name}.json')
+        instance_file = os.path.join(
+            INSTANCE_DIR,
+            f'{self._instance_name}.json'
+        )
         try:
             with open(instance_file) as instance_fd:
                 return json.load(instance_fd)
@@ -173,22 +144,48 @@ class Parser:
             log.error(f'Schema for OAS v{version} not not found')
             sys.exit(-1)
 
-    def serialize_annotations(self, exclude_internal=True):
+    def _get_entry_schema_uri(self):
+        entry_loc = None
+        for a in self._schema_output['annotations']:
+            if '/' not in a['keywordLocation'][1:]:
+                entry_loc = a['absoluteKeywordLocation']
+                break
+
+        entry_loc_uri = rfc3986.uri_reference(entry_loc)
+        if entry_loc_uri.fragment is None:
+            return entry_loc_uri
+        elif entry_loc_uri.fragment == '':
+            return entry_loc_uri.copy_with(fragment=None)
+        else:
+            entry_loc_ptr = JSONPointer.parse_uri_fragment(
+                entry_loc_uri.fragment
+            )[:-1]
+            if len(entry_loc_ptr) == 0:
+                return entry_loc_uri.copy_with(fragment=None)
+        return entry_loc_uri.copy_with(
+            fragment=entry_loc_ptr.uri_fragment()
+        )
+            
+    def _convert_unit(self, basic_unit, list_unit, unit_key, keyword):
+            if list_unit is None:
+                list_unit = {
+                    'valid': True,
+                    'schemaLocation': unit_key[0],
+                    'instanceLocation': unit_key[1],
+                    'evaluationPath': unit_key[2],
+                    'annotations': {},
+                }
+            list_unit['annotations'][keyword] = basic_unit['annotation']
+            return list_unit
+
+    def _convert_basic_to_list(self):
         output = {
             'valid': self._schema_output['valid'],
             'details': [],
         }
 
         units = {}
-        # defaultdict(lambda: {
-        #     'valid': True,
-        #     'schemaLocation': None,
-        #     'instanceLocation': None,
-        #     'evaluationPath': None,
-        #     'keyword': None,
-        #     'annotations': {},
-        # }
-        entry_schema_uri = None
+        entry_schema_uri = self._get_entry_schema_uri()
         for a in self._schema_output['annotations']:
             ep_ptr = JSONPointer(a['keywordLocation'])
             keyword = JSONPointer.unescape(ep_ptr[-1])
@@ -202,21 +199,20 @@ class Parser:
                 entry_schema_uri = rfc3986.uri_reference(sl)
 
             unit_key = (sl, il, ep)
-            unit = units.get(
-                unit_key,
-                {
-                    'valid': True,
-                    'schemaLocation': sl,
-                    'instanceLocation': il,
-                    'evaluationPath': ep,
-                    'annotations': {},
-                }
+            units[unit_key] = self._convert_unit(
+                basic_unit=a,
+                list_unit=units.get(unit_key, None),
+                unit_key=unit_key,
+                keyword=keyword,
             )
-            unit['annotations'][keyword] = a['annotation']
-            units[unit_key] = unit
+
 
         output['details'] = [u for u in units.values()]
+        return output
 
+    def serialize_annotations(self, exclude_internal=True):
+        entry_schema_uri = self._get_entry_schema_uri()
+        output = self._convert_basic_to_list()
         web_annotations = self.build_web_annotations(
             output,
             entry_schema_uri,
@@ -229,21 +225,10 @@ class Parser:
         json.dump(web_annotations, sys.stdout, indent=2)
         print('')
 
-    # These keywords use annotations for internal communcation,
-    # which is usually not of interest to end users.
-    INTERNAL_ANNOTATIONS = (
-        'properties', 'patternProperties', 'additionalProperties',
-        'unevaluatedProperties', 'unevaluatedItems', 'if',
-        'prefixItems', 'items', 'contains', 'minContains', 'maxContains',
-    )
-    DEFAULT_INSTANCE_BASE_URI = rfc3986.uri_reference(
-        'https://example.com/instances/',
-    )
     def build_web_annotations(
         self,
         output,
         entry_schema_uri,
-        # instance_base_uri=DEFAULT_INSTANCE_BASE_URI,
         exclude_internal=True,
     ):
         json.dump(output, sys.stdout, indent=2)
@@ -251,16 +236,14 @@ class Parser:
         for unit in output['details']:
             for keyword, value in unit['annotations'].items():
                 if not (
-                    exclude_internal and keyword in self.INTERNAL_ANNOTATIONS
+                    exclude_internal and keyword in INTERNAL_ANNOTATIONS
                 ):
-                    print(unit)
                     web_annotations.append(
                         self._unit_to_web_annotation(
                             unit,
                             keyword,
                             output,
                             entry_schema_uri,
-                            # instance_base_uri,
                         )
                     )
 
@@ -307,24 +290,9 @@ class Parser:
             ).unsplit(),
         }
 
-    def serialize_rdf(self, fmt='turtle'):
-        print(self._rdf_g.serialize(format=fmt))
-
 if __name__ == '__main__':
     argc = len(sys.argv) - 1
     instance_name = sys.argv[1] if argc > 0 else 'ypr'
-    graph_type = sys.argv[2] if argc > 1 else 'rdf'
-    serialize_only = argc > 2
-    with Parser(
-        instance_name,
-        use_rdf=graph_type == 'rdf',
-        clear_storage=(not serialize_only)
-    ) as parser:
-        if not serialize_only:
-            parser.parse()
-
-        if graph_type == 'rdf':
-            parser.serialize_rdf()
-
-        elif graph_type =='annotations':
-            parser.serialize_annotations()
+    parser = Parser(instance_name)
+    parser.parse()
+    parser.serialize_annotations()
