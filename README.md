@@ -123,7 +123,8 @@ Setting the URI for each file like that is fine when you only have one file,
 but it can get annoying with more.  The `-d` option lets you associate
 a directory with a URI prefix.  `oascomply` will replace the directory with
 the prefix to create the URI, and strip off any file extension automatically.
-There is no need to pass `-x` with `-d`, and the format is similar to `-f` —
+There is no need to pass `-x` with `-d` (although you can pass `-x false` to
+_disable_ extension stripping with `-d`), and the format is similar to `-f` —
 first the filesystem path, then the URI (or URI prefix in this case):
 
 ```

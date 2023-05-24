@@ -587,7 +587,25 @@ def validate_with_oas30():
     import yaml
     import json
 
-    parser = argparse.ArgumentParser(
+    class CustomArgumentParser(argparse.ArgumentParser):
+        def _fix_message(self, message):
+            # nargs=+ does not support metavar=tuple
+            return message.replace(
+                'REFS [REFS ...]',
+                'REF_SCHEMA [URI]',
+            ).replace(
+                'DIRECTORIES [DIRECTORIES ...]',
+                'DIRECTORY [URI_PREFIX]',
+            )
+
+        def format_usage(self):
+            return self._fix_message(super().format_usage())
+
+        def format_help(self):
+            return self._fix_message(super().format_help())
+
+
+    parser = CustomArgumentParser(
         description='Validates the instance against schemas using the '
                     'OAS 3.0 Schema Object dialect described by the '
                     'metaschema "{OAS30_DIALECT_METASCHEMA}"',
@@ -605,17 +623,56 @@ def validate_with_oas30():
         help='The schema, in JSON or YAML format, to use',
     )
     parser.add_argument(
+        'schema_uri',
+        nargs='?',
+        help='The URI for the schema, as if specified by '
+             'draft 2020-12\'s "$id"; see also -d',
+    )
+    parser.add_argument(
         '-r',
         '--referenced-schema',
+        nargs='+',
         action='append',
         dest='refs',
         default=[],
-        help='NOT YET SUPPORTED! '
-             'An additional schema from which to resolve references; '
-             'can be passed multiple times; note that schema documents '
-             'that reference each other are not currently supported; '
-             'currently, if schema A references schema B, then schema B '
-             'must be passed with -r *BEFORE* schema A',
+        help='An additional schema from which to resolve references, '
+             'optionally followed by a URI for the schema, as if '
+             'specified by draft 2020-12\'s "$id"; Can be passed multiple '
+             'times to provide multiple schemas in reverse resolution '
+             'order, meaning that given -r A -r B, schema B can "$ref" '
+             'schema A, but not the other way around.  See -d if '
+             'support for mutually referencing schema is needed.'
+    )
+    parser.add_argument(
+        '-d',
+        '--uri-prefix',
+        nargs=2,
+        metavar=('DIRECTORY', 'URI_PREFIX'),
+        action='append',
+        default=[],
+        dest='prefixes',
+        help="A directory followed by a URI prefix that MUST have a path "
+             "ending in '/'; \"$ref\" targets matching the URI prefix will "
+             "automatically be loaded from corresponding files in the "
+             "directory, checking first with a .json extension and then "
+             "with .yaml; if the schema passed as the 2nd argument is "
+             "in this directory and a URI for it is *not* passed as the "
+             "3rd positional argument, its URI will be created by "
+             "substituting this prefix for the directory and removing "
+             "any .json or .yaml prefix; can be passed multiple times; "
+             "see also -x",
+    )
+    parser.add_argument(
+        '-x',
+        '--strip-suffix',
+        nargs='?',
+        choices=('auto', 'true', 'false'),
+        default='auto',
+        help="Assign URIs to documents by stripping the file extension "
+             "from their file: URLs if they have not been assigned URIs by "
+             "the third positional argument or the two-argument form of -r "
+             "and if -d is not present; if -d is present, '-x false' can be "
+             "passed to *disable* prefix-stripping by -d"
     )
     parser.add_argument(
         '-o',
