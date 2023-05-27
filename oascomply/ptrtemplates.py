@@ -1,9 +1,15 @@
-from typing import Generator, Sequence, Tuple, Union
+from __future__ import annotations
+
+from typing import Generator, Iterable, Sequence, Tuple, Union, overload
 from collections import namedtuple
 import re
 import jschon
+import logging
 
 from oascomply.resourceid import JsonPtr, RelJsonPtr
+
+logger = logging.getLogger(__name__)
+
 
 TEMPLATE_UNESCAPED = r'[\x00-.0-z|\x7f-\U0010ffff]'
 TEMPLATE_VARIABLE = f'{TEMPLATE_UNESCAPED}*'
@@ -42,17 +48,24 @@ class JsonPtrTemplateEvaluationError(JsonPtrTemplateError):
     pass
 
 
-class JsonPtrTemplate:
-    def __init__(self, template: str):
+class JsonPtrTemplate(Sequence[str]):
+    """
+    The inteface of this class is essentially a copy of jschon.JSONPointer.
+    """
+    def __new__(cls, *values: Union[str, Iterable[str]]) -> JsonPtrTemplate:
+        self = object.__new__(cls)
+
+        # TODO: New signature
         if (m := re.fullmatch(JSON_POINTER_TEMPLATE, template)) is None:
             raise InvalidJsonPtrTemplateError(
                 f'{template!r} is not a valid JsonPtrTemplate!'
             )
+        if len(values) == 1 and isin
         self._template = template
 
         # Splitting '' results in [''], and '/' in ['', ''],
         # so always remove the initial ''
-        segments = template.split('/')[1:]
+        self._segments = template.split('/')[1:]
 
         # Components are one of:
         # * JsonPtr instances
@@ -62,7 +75,7 @@ class JsonPtrTemplate:
         #   only occur as the last component
         self._components= []
         currptr = JsonPtr()
-        for s in segments:
+        for s in self._segments:
             if s.startswith('{'):
                 if len(currptr) > 0:
                     self._components.append(currptr)
@@ -77,14 +90,63 @@ class JsonPtrTemplate:
         if len(currptr) or not len(self._components):
             self._components.append(currptr)
 
+        return self
+
     def __str__(self):
         return self._template
 
-    def __eq__(self, other):
-        return (
-            isinstance(other, type(self)) and
-            self._template == other._template
-        )
+    def __len__(self):
+        return len(self._segments)
+
+    @overload
+    def __getitem__(self, index: int) -> str:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> JsonPtrTemplate:
+        ...
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            return self._segments[index]
+        if isinstance(index, slice):
+            return JsonPtrTemplate(self._segments[index])
+        raise TypeError("Expecting int or slice")
+
+    @overload
+    def __truediv__(self, suffix: str) -> JsonPtrTemplate:
+        ...
+
+    @overload
+    def __truediv__(self, suffix: Iterable[str]) -> JsonPtrTemplate:
+        ...
+
+    def __truediv__(self, suffix) -> JsonPtrTemplate:
+        if isinstance(suffix, str):
+            return JsonPtrTemplate(self, (suffix,))
+        if isinstance(suffix, Iterable):
+            return JsonPtrTemplate(self, suffix)
+        return NotImplemented
+
+    def __eq__(self, other: JsonPtrTemplate) -> bool:
+        if isinstance(other, JsonPtrTemplate):
+            return self._template == other._template
+        return NotImplemented
+
+    def __le__(self, other: JsonPtrTemplate) -> bool:
+        """Return `self <= other` (self is a prefix of other)"""
+        if isinstance(other, JsonPtrTemplate):
+            return self._segments == other.segments[:len(self._segments)]
+        return NotImplemented
+
+    def __lt__(self, other: JsonPtrTemplate) -> bool:
+        """Return `self < other` (other is a prefix of self)"""
+        if isinstance(other, JsonPtrTemplate):
+            return self._segments[:len(other._segments)] == other._segments
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self._template)
 
     def evaluate(
         self,
@@ -156,6 +218,23 @@ class JsonPtrTemplate:
             assert next_c is True
             prev_val = next(reversed(variables.values()))
             yield TemplateResult(_resolved, instance, variables, prev_val)
+
+    def matches(self, ptr: JsonPtr):
+        if len(ptr) != len(self):
+            logger.error('len mismatch')
+            return False
+
+        ptr_segments = [list(ptr)]
+        logger.error(f'{self._segments} =? {ptr_segments}')
+        variables = {}
+        for i in range(len(ptr_segments)):
+            if ptr_segments[i] != self._segments[i]:
+                if self._segments[i].startswith('{'):
+                    variables[self._segments[i][1:-1]] = ptr_segments[i]
+                else:
+                    logger.error(f'seg mismatch {ptr_segments[i]!r} != {self._segments[i]!r}')
+                    return False
+        return True
 
 
     @staticmethod
