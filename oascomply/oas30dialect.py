@@ -606,12 +606,12 @@ def validate_with_oas30():
 
 
     parser = CustomArgumentParser(
-        description='Validates the instance against schemas using the '
-                    'OAS 3.0 Schema Object dialect described by the '
-                    'metaschema "{OAS30_DIALECT_METASCHEMA}"',
+        description=f'Validates the instance against schemas using the '
+                    f'OAS 3.0 Schema Object dialect described by the '
+                    f'metaschema "{OAS30_DIALECT_METASCHEMA}"',
         epilog=f'Note that the schema "{OAS30_DIALECT_METASCHEMA}" is '
-                '*NOT* provided by the OpenAPI Initiative, but is part of the '
-                'oascomply package (oascomply.schemas/oas/v3.0/base.json)',
+               f'*NOT* provided by the OpenAPI Initiative, but is part of the '
+               f'oascomply package (oascomply.schemas/oas/v3.0/base.json)',
         fromfile_prefix_chars='@',
     )
     parser.add_argument(
