@@ -105,14 +105,23 @@ class OasGraph:
         """Serialize the graph using the given output format."""
         if output_format == 'toml':
             return self.to_toml(*args, **kwargs)
-        kw = kwargs.copy()
-        if output_format not in OUTPUT_FORMATS_LINE and base is not None:
-            kw['base'] = base
-
+        actual_kwargs = kwargs.copy()
+        if output_format == 'json-ld':
+            # actual_kwargs['auto_compact'] = True
+            context_data = {
+                pfx: str(ns)
+                for pfx, ns in self._g.namespaces()
+                if pfx in ('oas', 'oas3.0', 'oas3.1', 'rdf', 'rdfs', 'xsd', 'schema')
+            }
+            context_data['apid'] = str(base)
+            actual_kwargs['context'] = context_data
+        elif output_format not in OUTPUT_FORMATS_LINE and base is not None:
+            actual_kwargs['base'] = str(base)
+        assert 'context' in actual_kwargs
         return self._g.serialize(
             *args,
             format=output_format,
-            **kwargs,
+            **actual_kwargs,
         )
 
     def to_toml(self, *args, destination, order, **kwargs):
