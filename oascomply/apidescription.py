@@ -26,10 +26,11 @@ from oascomply.oasgraph import (
 from oascomply.schemaparse import (
     Annotation, SchemaParser, JsonSchemaParseError,
 )
-from oascomply.oas30dialect import (
+from oascomply.oasjson import (
     OasJson, OasJsonTypeError, OasJsonRefSuffixError,
-    OasJsonUnresolvableRefError, OAS30_DIALECT_METASCHEMA,
+    OasJsonUnresolvableRefError,
 )
+from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA
 import oascomply.resourceid as rid
 
 __all__ = [
