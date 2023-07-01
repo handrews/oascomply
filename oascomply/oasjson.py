@@ -1,7 +1,7 @@
 import re
 import logging
 from collections import defaultdict
-from typing import Hashable, Union
+from typing import Hashable, Mapping, Union
 
 from jschon import JSON, JSONCompatible, JSONSchema, Result, URI
 from jschon.catalog import Catalog, CatalogError
@@ -61,7 +61,7 @@ class OasCatalog(Catalog):
             if uri.fragment is None or uri.fragment == '':
                 self.del_schema(base_uri)
                 # TODO: .value vs .data
-                return JSONSchema(
+                return OasJsonSchema(
                     resource.value,
                     uri=uri,
                     metaschema_uri=metaschema_uri,
@@ -156,6 +156,44 @@ class OasJsonRefSuffixError(OasJsonError, ValueError):
         return self.args[5]
 
 
+class OasJsonSchema(JSONSchema):
+    """:class:`jschon.jsonschema.JSONSchema` subclass embeddable in :class:`OasJson`"""
+    def __init__(
+            self,
+            value: Union[bool, Mapping[str, JSONCompatible]],
+            *,
+            catalog: Union[str, Catalog] = 'catalog',
+            cacheid: Hashable = 'default',
+            uri: URI = None,
+            metaschema_uri: URI = None,
+            parent: JSON = None,
+            key: str = None,
+            root: str = None,
+    ):
+        """
+        All parameters the same as for :class:`jschon.jsonschema.JSONSchema` unless
+        otherwise specified.
+
+        :param root: The :class:`jschon.json.JSON` instance at the root of the document;
+                     if None, then this instance is at the document root.  It is an error
+                     to specify a parent but not a root.
+        """
+        super().__init__(
+            value,
+            catalog=catalog,
+            cacheid=cacheid,
+            uri=uri,
+            metaschema_uri=metaschema_uri,
+            parent=parent,
+            key=key,
+        )
+        if root is None and parent is not None:
+            raise ValueError('Cannot be a document root if a parent is present')
+
+        self.document_root = self if root is None else root
+        """Root :class:`jschon.json.JSON` object in the document."""
+
+
 class OasJson(JSON):
     """
     Representation of an OAS-complaint API document.
@@ -185,6 +223,12 @@ class OasJson(JSON):
 
         if itemclass is None:
             itemclass = OasJson
+
+        self.document_root = itemkwargs['root'] if 'root' in itemkwargs else self
+        """Root :class:`jschon.json.JSON` object in the document."""
+
+        if 'root' not in itemkwargs:
+            itemkwargs['root'] = self.document_root
 
         if 'oasversion' not in itemkwargs:
             if 'openapi' not in value:
@@ -270,10 +314,10 @@ class OasJson(JSON):
         )
 
     def convert_to_schema(self, key):
-        if not isinstance(self.data[key], JSONSchema):
+        if not isinstance(self.data[key], OasJsonSchema):
             # TODO: Figure out jschon.URI vs rid.Uri*
             # TODO: .value vs .data
-            self.data[key] = JSONSchema(
+            self.data[key] = OasJsonSchema(
                 self.data[key].value,
                 parent=self,
                 key=key,
