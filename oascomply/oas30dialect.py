@@ -387,6 +387,7 @@ def validate_with_oas30():
             ref_schema = JSONSchema(
                 yaml.safe_load(ref_fd),
                 metaschema_uri=metaschema_uri,
+                catalog='oascomply',
             )
             meta_result = ref_schema.validate()
             if not meta_result.valid:
@@ -397,6 +398,7 @@ def validate_with_oas30():
         schema = JSONSchema(
             yaml.safe_load(schema_fd),
             metaschema_uri=metaschema_uri,
+            catalog='oascomply',
         )
         meta_result = schema.validate()
         if not meta_result.valid:

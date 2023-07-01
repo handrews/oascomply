@@ -1,7 +1,7 @@
 import re
 import logging
 from collections import defaultdict
-from typing import Union
+from typing import Hashable, Union
 
 from jschon import JSON, JSONCompatible, JSONSchema, Result, URI
 from jschon.catalog import Catalog, CatalogError
@@ -22,6 +22,7 @@ from oascomply.ptrtemplates import (
 import oascomply.resourceid as rid
 
 __all__ = [
+    'OasCatalog',
     'OasJson',
     'OasJsonError',
     'OasJsonTypeError',
@@ -31,9 +32,52 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-OAS30_SUBSET_VOCAB = "https://spec.openapis.org/oas/v3.0/vocab/draft-04-subset"
-OAS30_EXTENSION_VOCAB = "https://spec.openapis.org/oas/v3.0/vocab/extension"
-OAS30_DIALECT_METASCHEMA = "https://spec.openapis.org/oas/v3.0/dialect/base"
+
+class OasCatalog(Catalog):
+    def get_resource(self, uri, *, cacheid='default'):
+        return self._schema_cache[cacheid][uri]
+
+    def get_schema(
+            self,
+            uri: URI,
+            *,
+            metaschema_uri: URI = None,
+            cacheid: Hashable = 'default',
+    ) -> JSONSchema:
+        try:
+            return super().get_schema(
+                uri,
+                metaschema_uri=metaschema_uri,
+                cacheid=cacheid,
+            )
+        except CatalogError as e:
+            if 'not a JSON Schema' not in str(e):
+                raise
+
+            base_uri = uri.copy(fragment=False)
+            resource = self.get_resource(base_uri, cacheid=cacheid)
+            self.del_schema(uri)
+
+            if uri.fragment is None or uri.fragment == '':
+                self.del_schema(base_uri)
+                # TODO: .value vs .data
+                return JSONSchema(
+                    resource.value,
+                    uri=uri,
+                    metaschema_uri=metaschema_uri,
+                    catalog=self,
+                    cacheid=cacheid,
+                )
+            if not uri.fragment.startswith('/'):
+                raise ValueError(
+                    'Non-JSON Pointer fragments not yet supported',
+                )
+            ptr = rid.JsonPtr.parse_uri_fragment(uri.fragment)
+            parent_ptr = ptr[:-1]
+            key = ptr[-1]
+
+            parent = parent_ptr.evaluate(resource)
+            return parent.convert_to_schema(key)
 
 
 class OasJsonError(Exception):
@@ -112,9 +156,6 @@ class OasJsonRefSuffixError(OasJsonError, ValueError):
         return self.args[5]
 
 
-# NOTE: This depends on the changes proposed in jschon PR #101,
-#       currently available through the git repository as shown
-#       in pyproject.toml.
 class OasJson(JSON):
     """
     Representation of an OAS-complaint API document.
@@ -136,10 +177,15 @@ class OasJson(JSON):
         parent=None,
         key=None,
         itemclass=None,
-        catalog='catalog',
+        catalog='oascomply',
         cacheid='default',
         **itemkwargs,
     ):
+        logger.info(f'OasJson(uri={str(uri)!r}, url={str(url)!r}, ...)')
+
+        if itemclass is None:
+            itemclass = OasJson
+
         if 'oasversion' not in itemkwargs:
             if 'openapi' not in value:
                 raise ValueError(
@@ -166,13 +212,29 @@ class OasJson(JSON):
                 )
         self._oas_metaschema_uri = itemkwargs['oas_metaschema_uri']
         self._oasversion = itemkwargs['oasversion']
+        if uri is None:
+            # TODO: JsonPtr vs str
+            self.uri = parent.uri.copy_with(
+                fragment=rid.JsonPtr.parse_uri_fragment(
+                    str(parent.uri.fragment),
+                ) / key,
+            )
+        elif isinstance(uri, rid.UriWithJsonPtr):
+            self.uri = uri
+        else:
+            self.uri = rid.UriWithJsonPtr(str(uri))
 
-        self.uri = uri if isinstance(
-            uri, rid.UriWithJsonPtr
-        ) else rid.UriWithJsonPtr(str(uri))
-        self.url = url if isinstance(
-            url, rid.UriWithJsonPtr
-        ) else rid.UriWithJsonPtr(str(url))
+        if url is None:
+            # TODO: JsonPtr vs str
+            self.url = parent.url.copy_with(
+                fragment=rid.JsonPtr.parse_uri_fragment(
+                    str(parent.url.fragment),
+                ) / key,
+            )
+        elif isinstance(url, rid.UriWithJsonPtr):
+            self.url = url
+        else:
+            self.url = rid.UriWithJsonPtr(str(url))
 
         if not isinstance(catalog, Catalog):
             catalog = Catalog.get_catalog(catalog)
@@ -199,119 +261,27 @@ class OasJson(JSON):
         self._schemakwargs['cacheid'] = cacheid
         self._value = value
 
-        self._to_resolve = []
         super().__init__(
             value,
             parent=parent,
             key=key,
+            itemclass=itemclass,
             **itemkwargs,
         )
 
-    def instantiate_mapping(self, value):
-        schema_constructor = (
-            # Note that we intentionally replace kwargs with self._schemakwargs
-            lambda v, parent, key, uri, **kwargs: JSONSchema(
-                v,
-                parent=parent,
+    def convert_to_schema(self, key):
+        if not isinstance(self.data[key], JSONSchema):
+            # TODO: Figure out jschon.URI vs rid.Uri*
+            # TODO: .value vs .data
+            self.data[key] = JSONSchema(
+                self.data[key].value,
+                parent=self,
                 key=key,
-                uri=URI(str(uri)),
-                metaschema_uri=self._oas_metaschema_uri,
+                uri=URI(str(
+                    self.uri.copy_with(fragment=self.uri.fragment / key),
+                )),
+                metaschema_uri=URI(str(self._oas_metaschema_uri)),
                 **self._schemakwargs,
             )
-        )
-        if str(self.path) == '/components/schemas':
-            classes = defaultdict(lambda: schema_constructor)
-        elif self.path and self.path[-1] == 'examples':
-            classes = defaultdict(lambda: JSON)
-        else:
-            classes = defaultdict(lambda: type(self))
-            classes['schema'] = schema_constructor
-            classes['example'] = JSON
-            classes['default'] = JSON
-            classes['enum'] = JSON
-
-        mapping = {}
-        for k, v in value.items():
-            mapping[k] = classes[k](
-                v,
-                parent=self,
-                key=k,
-                uri=self.uri.copy_with(fragment=self.uri.fragment / k),
-                url=self.url.copy_with(fragment=self.url.fragment / k),
-                **self.itemkwargs,
-            )
-            if isinstance(mapping[k], JSONSchema):
-                root = self
-                while root.parent is not None:
-                    root = root.parent
-                root._to_resolve.append(mapping[k])
-        return mapping
-
-    def resolve_references(self):
-        for schema in self._to_resolve:
-            if not isinstance(schema, JSONSchema):
-                if isinstance(schema, OasJson):
-                    # TODO: manage empty fragments better in general
-                    # TODO: duplication with other raise OasJsonTypeError
-                    uri = self.uri.copy_with(
-                        fragment=None,
-                    ) if self.uri.fragment == '' else self.uri
-                    url = self.url.copy_with(
-                        fragment=None,
-                    ) if self.url.fragment == '' else self.url
-                    raise OasJsonTypeError(uri=uri, url=url)
-            try:
-                schema._resolve_references()
-            except CatalogError as e:
-                import re
-                if m := re.search(
-                    'source is not available for "([^"]*)"',
-                    str(e),
-                ):
-                    ref_uri = rid.Iri(m.groups()[0])
-                    ref_resource_uri = ref_uri.to_absolute()
-                    logger.warning(
-                        f'Could not load referenced schema {ref_uri}, '
-                        'checking for common configuration errors...',
-                    )
-                    for suffix in ('.json', '.yaml', '.yml'):
-                        uri_with_suffix = f'{ref_resource_uri}{suffix}'
-                        try:
-                            if ref_schema := schema.catalog.get_schema(
-                                URI(uri_with_suffix),
-                                cacheid=schema.cacheid,
-                            ):
-                                raise OasJsonRefSuffixError(
-                                    source_schema_uri=rid.Iri(
-                                        str(schema.uri)
-                                    ),
-                                    ref_uri=ref_uri,
-                                    ref_resource_uri=ref_resource_uri,
-                                    target_resource_uri=rid.Iri(
-                                        uri_with_suffix
-                                    ),
-                                    suffix=suffix,
-                                ) from e
-                        except CatalogError:
-                            pass
-                    raise OasJsonUnresolvableRefError(ref_uri)
-
-                elif m := re.search(' ([^ ]*) is not a JSON Schema', str(e)):
-                    uri = rid.Iri(m.groups()[0]).copy_with(
-                        fragment=None,
-                    ) if self.uri.fragment == '' else self.uri
-                    url = None # self.url.copy_with(
-                    #     fragment=None,
-                    # ) if self.url.fragment == '' else self.url
-                    raise OasJsonTypeError(uri=uri, url=url) from e
-                raise
-
-    def evaluate(self, instance: JSON, result: Result = None) -> Result:
-        # TODO: manage empty fragments better in general
-        uri = self.uri.copy_with(
-            fragment=None,
-        ) if self.uri.fragment == '' else self.uri
-        url = self.url.copy_with(
-            fragment=None,
-        ) if self.url.fragment == '' else self.url
-        raise OasJsonTypeError(uri=uri, url=url)
+            self.data[key]._resolve_references()
+        return self.data[key]
