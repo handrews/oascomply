@@ -5,7 +5,7 @@ from pathlib import Path
 import urllib
 from uuid import uuid4
 from collections import defaultdict, namedtuple
-from typing import Any, Iterator, Mapping, Optional, Tuple, Union
+from typing import Any, Iterator, Mapping, Optional, Tuple, Type, Union
 import logging
 import os
 import sys
@@ -208,8 +208,7 @@ class ApiDescription:
             self._sources[uri] = sourcemap
         self._g.add_resource(url, uri, filename=path.name)
 
-
-    def get_resource(self, uri: Union[str, rid.Iri]) -> Optional[Any]:
+    def get_resource(self, uri: Union[str, rid.Iri]) -> Type[jschon.JSON]:
         if not isinstance(uri, rid.IriWithJsonPtr):
             # TODO: IRI vs URI
             # TODO: Non-JSON Pointer fragments in 3.1
@@ -226,6 +225,20 @@ class ApiDescription:
         except (KeyError, jschon.JSONPointerError):
             logger.warning(f"Could not find resource {uri}")
             raise # return None, None, None
+
+
+    def get_resource2(self, uri: Union[str, rid.Iri], cacheid: str = 'default') -> Optional[Any]:
+        logger.debug(f"Retrieving '{uri}' from cache '{cacheid}'")
+        # TODO: URI library confusion
+        return schema_catalog.get_resource(jschon.URI(str(uri)), cacheid=cacheid)
+
+    def get_sourcemap(self, uri: Union[str, rid.Iri]):
+        if not isinstance(uri, rid.IriWithJsonPtr):
+            # TODO: IRI vs URI
+            # TODO: Non-JSON Pointer fragments in 3.1
+            uri = rid.IriWithJsonPtr(uri)
+
+        return self._sources.get(uri.to_absolute())
 
     def validate(
         self,
@@ -245,7 +258,19 @@ class ApiDescription:
 
         document, data, sourcemap = self.get_resource(resource_uri)
         assert None not in (document, data)
+        data2 = self.get_resource2(resource_uri, cacheid=document.oasversion)
+        assert data2 is not None
+        document2 = data2.document_root
+        sourcemap2 = self.get_sourcemap(resource_uri)
 
+        if sourcemap != sourcemap2:
+            logger.error(f'SOURCEMAP ERROR')
+        if (data, document) != (data2, document2):
+            if data != data2:
+                logger.error(f'DATA ERROR:\n{data}\n\n{data2}\n\n')
+            if document != document2:
+                logger.error(f'DOCUMENT ERROR:\n{document}\n\n{document2}\n\n')
+            assert False
         try:
             output = sp.parse(data, oastype)
         except JsonSchemaParseError as e:

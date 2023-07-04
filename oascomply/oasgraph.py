@@ -580,6 +580,7 @@ class OasGraph:
                     ),
                     metaschema_uri=m_uri,
                     catalog='oascomply',
+                    cacheid=document.oasversion,
                 ))
 
         # TODO: Handle encoding objects
