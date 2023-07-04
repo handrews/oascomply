@@ -425,7 +425,12 @@ class OasJson(JSON):
         cacheid='default',
         **itemkwargs,
     ):
-        logger.info(f'OasJson(uri={str(uri)!r}, url={str(url)!r}, ...)')
+        logger.info(
+            f'OasJson({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
+            f'parent={None if parent is None else id(parent)}, '
+            f'key={key}, itemclass={itemclass}, catalog={catalog}, '
+            f'cacheid={cacheid}, ...)',
+        )
 
         self.document_root: Type[JSON]
         """Root :class:`jschon.json.JSON` object in the document."""
