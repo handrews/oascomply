@@ -10,9 +10,9 @@ or network resource *URLs*
 
 * See :doc:`overview` for definitions of **APID** and **document**.
 * See :doc:`url-uri-iri` for background on when and why it is important
-    to distinguish aong **URLs**, **URIs**, and/or **IRIs**, as well as
-    the distinction between these terms and **relative references** and
-    other terminology
+  to distinguish aong **URLs**, **URIs**, and/or **IRIs**, as well as
+  the distinction between these terms and **relative references** and
+  other terminology
 
 Use cases
 ---------
@@ -32,8 +32,8 @@ real-world development and deployment use cases as easy as possible:
 including arbitrary differences between development and production environments,
 although the most complex cases require complex command-line arguments.
 
-These use cases are handled by mapping each document's ***URL***
-(the location from which it is loaded) to its ***URI*** (the way it
+These use cases are handled by mapping each document's **URL**
+(the location from which it is loaded) to its **URI** (the way it
 is identified in references).
 
 See :doc:`url-uri-iri` for how ``oascomply`` defines *URL* and *URI*, and why
@@ -53,31 +53,35 @@ Since compliex APIDs can require long command lines, the ``@`` prefix can be use
 
 **Options for loading individual documents:**
 
-====== ====================== ================================= ==================================== ====================
-short  long                   args                              behavior                             default
-====== ====================== ================================= ==================================== ====================
-``-i`` ``--initial-document`` (``FILE`` | ``URL``) [``URI``]    *see* ***initial document*** *table*
-``-f`` ``--file``             ``FILE`` [``URI``] [``TYPE``]     map URI to FILE
-``-u`` ``--url``              ``URL`` [``URI``] [``TYPE``]      map URI to URL
-``-x`` ``--strip-suffixes``   ``SUFFIX`` [``SUFFIX`` ...]       strip any suffixes present           ``.json .yaml .yml``
-====== ====================== ================================= ==================================== ====================
+.. The following table includes non-breaking spaces " " and hyphens "‑"; note that syntax highlighters might be confused about these characters being adjacent to formatting markers like ``
+
+====== ====================== ======================================== ==================================== ====================
+short  long                   args                                     loading behavior                     default
+====== ====================== ======================================== ==================================== ====================
+``‑i`` ``‑‑initial‑document`` (``FILE`` | ``URL``) [``URI``]           *see* **initial document** *table*
+``‑f`` ``‑‑file``             ``FILE`` [``URI``] [``TYPE``]            map ``URI to ``FILE``
+``‑u`` ``‑‑url``              ``URL`` [``URI``] [``TYPE``]             map ``URI to ``URL``
+``‑x`` ``‑‑strip‑suffixes``   ``SUFFIX`` [``SUFFIX`` ...]              strip any suffixes present           ``.json .yaml .yml``
+====== ====================== ======================================== ==================================== ====================
 
 * ``-f`` and ``-u`` can be repeated as many times as necessary
 * ``-x`` can only be specified once and applies to all ``-f`` and ``-u`` without the ``URI`` argument
 * When ``URI`` is omitted, the ``URL`` (``-u``) or the ``file:`` URL
-    corresponding to ``FILE`` (``-f``) is used, as modified based on ``-x``
+  corresponding to ``FILE`` (``-f``) is used, as modified based on ``-x``
 * ``-x`` is **ignored** for ``-f`` and ``-u`` options that have a ``URI`` argument
 
 **Options for resolving references from sets of possible documents:**
 
-====== =================== ================================= =================================== =======================
-short  long                args                              behavior                            default
-====== =================== ================================= =================================== =======================
-``-d`` ``--directory``       ``DIR`` [``URI_PREFIX``]        replace URI_PREFIX with DIR
-``-p`` ``--url-prefix``      ``URL_PREFIX`` [``URI_PREFIX``] replace URI_PREFIX with URL_PREFIX
-``-F`` ``--file-suffixes``   ``SUFFIX`` [``SUFFIX`` ...]     try each path suffix in order       ``.json .yaml .yml``
-``-U`` ``--url-suffixes``    ``SUFFIX`` [``SUFFIX`` ...]     try each URL suffix in order        ``"" .json .yaml .yml``
-====== =================== ================================= =================================== =======================
+.. The following table includes non-breaking spaces " " and hyphens "‑"; note that syntax highlighters might be confused about these characters being adjacent to formatting markers like ``
+
+====== =================== ========================================= ========================================== =======================
+short  long                args                                      resolution behavior                        default
+====== =================== ========================================= ========================================== =======================
+``‑d`` ``‑‑directory``       ``DIR`` [``URI_PREFIX``]                replace ``URI_PREFIX`` with ``DIR``
+``‑p`` ``‑‑url‑prefix``      ``URL_PREFIX`` [``URI_PREFIX``]         replace ``URI_PREFIX`` with ``URL_PREFIX``
+``‑F`` ``‑‑file‑suffixes``   ``SUFFIX`` [``SUFFIX`` ...]             try each path suffix in order              ``.json .yaml .yml``
+``‑U`` ``‑‑url‑suffixes``    ``SUFFIX`` [``SUFFIX`` ...]             try each URL suffix in order               ``"" .json .yaml .yml``
+====== =================== ========================================= ========================================== =======================
 
 **Managing options:**
 
@@ -88,28 +92,33 @@ short  long                args                              behavior           
 * Only ``http:`` and ``https:`` URLs and URL prefixes are supported for ``-u`` and ``-p``
 * URIs and URI prefixes can use any scheme, including non-URL schemes like ``urn:``
 * All URL and URI prefixes **must** have a path component ending in  ``/``,
-    which aligns URL/URI_PREFIX behavior with DIR behavior
+  which aligns URL/URI_PREFIX behavior with DIR behavior
 
 **File extension suffixes:**
+
 * ``-x`` unconditionally strips one suffix (e.g. ``.json`` or ``.whatever``)
 * ``SUFFIX`` **must** include the leading dot (e.g. ``.json``) or **may** be the empty string (quoted appropriately for your shell, e.g. ``""``)
 * Complex mappings that aren't handled by ``-x``, ``-d``, ``-p``, ``-F``, and ``-U`` can be supported by mapping each document individually with ``-f`` and ``-u``
 
-The ``-i`` option tells ``oascomply`` where to start processing the APID:
+**Initial document:**
+
+The ``-i`` option tells ``oascomply`` where to start processing the APID.  It can behave like the loading options ``-f`` or ``-u``, or indicate a document to be resolved via ``-d`` or ``-p`` (if those options are present).
 
 ============== ========================= ================================ =========================
 ``-i``         ``-d``                    ``-p``                           effect
 ============== ========================= ================================ =========================
-``FILE [URI]``                                                            same as ``-f FILE [URI]``
-``URL [URI]``                                                             same as ``-u URL [URI``
-``FILE``       ``DIR`` contains ``FILE``                                  maps URI based on ``-d``
-``URL``                                  ``URL_PREFIX`` prefix of ``URL`` maps URI based on ``-p``
-``FILE  URI``  ``DIR`` contains ``FILE``                                  same as ``-f FILE [URI]``
-``URL  URL``                             ``URL_PREFIX`` prefix of ``URL`` same as ``-u URL [URI``
+``FILE [URI]``                                                            same as ``‑f FILE [URI]``
+``URL [URI]``                                                             same as ``‑u URL [URI``
+``FILE``       ``DIR`` contains ``FILE``                                  maps URI based on ``‑d``
+``URL``                                  ``URL_PREFIX`` prefix of ``URL`` maps URI based on ``‑p``
+``FILE  URI``  ``DIR`` contains ``FILE``                                  same as ``‑f FILE [URI]``
+``URL  URL``                             ``URL_PREFIX`` prefix of ``URL`` same as ``‑u URL [URI``
 ============== ========================= ================================ =========================
 
 
-If it is absent, ``oascomply`` looks for a document containing an ``openapi`` field, first in the ``-f`` options in the order they were passed, then the ``-u`` options.
+If ``-i`` is absent, ``oascomply`` looks for a document containing an ``openapi`` field, first in the ``-f`` options in the order they were passed, then the ``-u`` options in the order they are passed.  The relative order of ``-f`` and ``-u`` options is not taken into account.  Searching ``-f`` in such a way is necessary if, for some reason, the initial OAS file has a name beginning with ``http://`` or ``https://``, which is possible on some file systems.
+
+Note that ``-i`` cannot load a file that begins with ``http:`` or ``https:`` as it will interpret the file as a URL.  To loa
 
 
 When optional URI or URI_PREFIX options are omitted, the URL or URL prefix is used in
@@ -123,7 +132,7 @@ Note that:
 Single-document APIDs
 ---------------------
 
-
+TBD
 
 References, identity, and location
 ----------------------------------
@@ -184,15 +193,15 @@ you will likely get any one of *"API definition"*, *"API description"*,
 or *"API document"*.  Some will use "API document" even if that "document"
 consists of multiple files and/or network resources.
 
-Within ``oascomply``, a "document" is always a ***single*** OAS-compliant
+Within ``oascomply``, a "document" is always a **single** OAS-compliant
 local file or network resource.  The complete set of one or more such
-documents associated with an API is always called an ***APID***, where
+documents associated with an API is always called an **APID**, where
 the exact meaning of the "D" is left unspecified.
 
 
 Since there is no consensus within the OpenAPI community on the correct
 term for a set of
-***Note:** There is much debate in the OpenAPI community as to whether
+**Note:** *There is much debate in the OpenAPI community as to whether
 the OpenAPI Specification (OAS) is used to **define** or **describe**
 an API.  Some OAS users sidestep this by referring to an API's
 **OAS document**, even if that "document" consists of multiple files
