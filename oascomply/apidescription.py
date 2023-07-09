@@ -14,10 +14,6 @@ import jschon
 
 import rdflib
 from rdflib.namespace import RDF
-import yaml
-import json_source_map as jmap
-import yaml_source_map as ymap
-from yaml_source_map.errors import InvalidYamlError
 
 from oascomply import schema_catalog
 from oascomply.oasgraph import (
@@ -29,6 +25,7 @@ from oascomply.schemaparse import (
 from oascomply.oasjson import (
     OasJson, OasJsonTypeError, OasJsonRefSuffixError,
     OasJsonUnresolvableRefError,
+    _json_loadf, _yaml_loadf,
 )
 from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA
 import oascomply.resourceid as rid
@@ -412,32 +409,10 @@ class ApiDescription:
                 f'...assigning URI <{uri}> from URL <{full_path.as_uri()}>',
             )
 
-        content = path.read_text(encoding='utf-8')
-        sourcemap = None
         if filetype == 'json':
-            data = json.loads(content)
-            if create_source_map:
-                logger.info(
-                    f'Creating JSON sourcemap for {path}, '
-                    '(can disable with -n if slow)',
-                )
-                sourcemap = jmap.calculate(content)
+            data, url, sourcemap = _json_loadf(full_path)
         elif filetype == 'yaml':
-            data = yaml.safe_load(content)
-            if create_source_map:
-                # The YAML source mapper gets confused sometimes,
-                # just log a warning and work without the map.
-                try:
-                    logger.info(
-                        f'Creating YAML sourcemap for {path}, '
-                        '(can disable with -n if slow)',
-                    )
-                    sourcemap = ymap.calculate(content)
-                except InvalidYamlError:
-                    logger.warn(
-                        f"Unable to calculate source map for {path}",
-                    )
-                    pass
+            data, url, sourcemap = _yaml_loadf(full_path)
         else:
             raise ValueError(f"Unsupported file type {filetype!r}")
 
