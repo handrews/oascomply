@@ -36,6 +36,32 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+HELP_PROLOG = """
+Load and validate an API Description/Definition (APID).
+
+The initial APID document is parsed immediately, with other documents parsed
+as they are referenced.  The initial document is the first of:
+
+1. The document from -i (--initial-document)
+2. The first document from a -f (--file) containing an "openapi" field
+3. The first document from a -u (--url) containing an "openapi" field 
+
+All referenced documents MUST be provided in some form on the command line,
+either individually (with -f or -u) or as a document tree to search (with
+-d or -p).  Documents are loaded from their URL and referenced by their URI.
+
+Each document's URL is the URL from which it was retrieved. If loaded from
+a local filesystem path, the URL is the corresponding "file:" URL.
+
+A document's URI is either determined from the URL (potentially as modified
+by the -x, -D, and -P options), or set directly on the command line
+(using additional arguments to -i, -f, -u, -d, or -p)..
+This allows reference resolution to work even if the documents are not named
+or deployed in the way the references expect.
+
+See the "Loading APIDs and Schemas" tutorial for full documentation.
+"""
+
 HELP_EPILOG = """
 See the README for further information on:
 
@@ -480,11 +506,17 @@ class ApiDescription:
             def _fix_message(self, message):
                 # nargs=+ does not support metavar=tuple
                 return message.replace(
+                    'INITIAL [INITIAL ...]',
+                    'FILE|URL [URI]',
+                ).replace(
                     'FILES [FILES ...]',
                     'FILE [URI] [TYPE]',
                 ).replace(
-                    'DIRECTORIES [DIRECTORIES ...]',
-                    'DIRECTORY [URI_PREFIX]',
+                    'URLS [URLS ...]',
+                    'URL [URI] [TYPE]',
+                ).replace(
+                    'PREFIXES [PREFIXES ...]',
+                    'URL_PREFIX [URI_PREFIX]',
                 )
 
             def format_usage(self):
@@ -495,8 +527,21 @@ class ApiDescription:
 
         parser = CustomArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=HELP_PROLOG,
             epilog=HELP_EPILOG,
             fromfile_prefix_chars='@',
+        )
+        parser.add_argument(
+            '-i',
+            '--initial-document',
+            metavar='INITIAL',
+            nargs='+',
+            help="NOT YET IMPLEMENTED!!! "
+                "The document from which to start validating; can "
+                "follow the -f or -u syntax to load the document directly "
+                "and assigne or calculate a URI, or give a path under the "
+                "directory of a -d option or the URL prefix of a -p argument "
+                "to assign a URI based on the -d or -p's URI prefix",
         )
         parser.add_argument(
             '-f',
@@ -504,53 +549,78 @@ class ApiDescription:
             nargs='+',
             action='append',
             dest='files',
-            help="An API description file as a local path, optionally "
-                 "followed by a URI to use in place of the path's "
-                 "corresponding file: URL; validation begins with the "
-                 "first file containing an 'opnapi' field, with any "
-                 "others used to resolve references; see also -d, -x",
+            help="An APID document as a local file, optionally followed by "
+                 "a URI to use for reference resolution in place of the "
+                 "corresponding 'file:' URL; this option can be repeated; "
+                 "see also -x",
+        )
+        parser.add_argument(
+            '-u',
+            '--url',
+            nargs='+',
+            action='append',
+            dest='urls',
+            help="A URL for an APID document, optionally followed by a URI "
+                 "to use for reference resolution; by default only 'http:' "
+                 "and 'https:' URLs are supported; this option can be "
+                 "repeated; see also -x",
+        )
+        parser.add_argument(
+            '-x',
+            '--strip-suffixes',
+            nargs='*',
+            default=('.json', '.yaml', '.yml'),
+            help="For documents loaded with -f or -u without an explict URI "
+                "assigned on the command line, assign a URI by stripping any "
+                "of the given suffixes from the document's URL; passing this "
+                "option without any suffixes disables this behavior, treating "
+                "the unmodified URL as the URI; the default stripped suffixes "
+                "are .json, .yaml, .yml",
         )
         parser.add_argument(
             '-d',
-            '--uri-prefix',
-            '--iri-prefix',
+            '--directory',
             nargs=2,
             metavar=('DIRECTORY', 'URI_PREFIX'),
             action='append',
             default=[],
+            dest='directories',
+            help="Resolve references matching the URI prefix from the given "
+                "directory; this option can be repeated; see also -D",
+        )
+        parser.add_argument(
+            '-p',
+            '--url-prefix',
+            nargs='+',
+            action='append',
+            default=[],
             dest='prefixes',
-            help="A directory followed by a URI prefix that MUST have a path "
-                 "ending in '/'; files loaded from this directory will be "
-                 "assigned URIs by replacing the directory with the prefix "
-                 "and stripping any file extension, unless overridden "
-                 "with the 2nd argument to -f; see also -x"
+            help="Resolve references the URI prefix by replacing it with "
+                "the given URL prefix; or directly from URLs matching the "
+                "URL prefix if no URI prefix is provided; this option can be "
+                "repeated; see also -P",
         )
         parser.add_argument(
             '-D',
-            '--directory',
-            nargs='+',
-            action='append',
-            dest='directories',
-            help="NOT YET IMPLEMENTED "
-                 "A directory containing API description files, optionally "
-                 "followed by an URI prefix with a path component ending in "
-                 "a '/';  The path-only form is equivaent to using -f on "
-                 "every .json, .yaml, or .yml file in the directory or its "
-                 "subdirectories (excluding dot-prefixed ones such as .git); "
-                 "The path with URI prefix form is equivalent to the same -f "
-                 "behavior plus -d",
+            '--directory-suffixes',
+            nargs='*',
+            default=('.json', '.yaml', '.yml'),
+            help="When resolving references using -d, try appending each "
+                "suffix in order to the file path until one succeeds; "
+                "the empty string can be passed to try loading the "
+                "unmodified path first as JSON and then if that fails as "
+                "YAML; the default suffixes are .json, .yaml .yml",
         )
         parser.add_argument(
-            '-x',
-            '--strip-suffix',
-            nargs='?',
-            choices=('auto', 'true', 'false'),
-            default='auto',
-            const='true',
-            help="Assign URIs to documents by stripping the file extension "
-                 "from their URLs if they have not been assigned URIs by "
-                 "-d or the two-argument form of -f; can be set to false "
-                 "to *disable* prefix-stripping by -d"
+            '-P',
+            '--url-prefix-suffixes',
+            nargs='*',
+            default=('.json', '.yaml', '.yml'),
+            help="When resolving references using -p, try appending each "
+                "suffix in order to the URL until one succeeds; the empty "
+                "string can be passed to try loading the unmodified URL "
+                "which will be parsed based on the HTTP Content-Type header; "
+                "by default, no suffixes are appended to URLs",
         )
         parser.add_argument(
             '-n',
@@ -567,17 +637,6 @@ class ApiDescription:
             default='true',
             help="Pass 'false' to disable validation of examples and defaults "
                  "by the corresponding schema.",
-        )
-        parser.add_argument(
-            '-i',
-            '--allow-iris',
-            action='store_true',
-            help="NOT YET IMPLEMENTED "
-                 "Allow IRIs (URIs/URLs with full unicode support) even where "
-                 "OAS and JSON Schema only support URIs/URLs; only use this "
-                 "option if your OAS tooling supports IRIs and you want to "
-                 "suppress errors about using unencoded non-ASCII characters "
-                 "in your URIs/URLs."
         )
         parser.add_argument(
             '-o',
