@@ -710,18 +710,16 @@ class ApiDescription:
         else:
             logging.basicConfig(level=logging.WARN)
 
-        strip_suffix = {
-            'auto': None,
-            'true': True,
-            'false': False,
-        }[args.strip_suffix]
+        # TODO: Fix temporary hack
+        strip_suffix = not bool(args.strip_suffixes)
         logger.debug(f'Processed arguments:\n{args}')
 
-        if args.directories:
-            raise NotImplementedError('-D option not yet implemented')
+        if args.initial_document:
+            raise NotImplementedError('-i option not yet implemented')
 
         try:
-            prefixes = [cls._process_prefix(p) for p in args.prefixes]
+            # TODO: prefixes -> directories migration/split
+            prefixes = [cls._process_prefix(p) for p in args.directories]
         except ValueError as e:
             logger.error(str(e))
             sys.exit(-1)
