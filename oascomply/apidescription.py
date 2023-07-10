@@ -44,7 +44,7 @@ as they are referenced.  The initial document is the first of:
 
 1. The document from -i (--initial-document)
 2. The first document from a -f (--file) containing an "openapi" field
-3. The first document from a -u (--url) containing an "openapi" field 
+3. The first document from a -u (--url) containing an "openapi" field
 
 All referenced documents MUST be provided in some form on the command line,
 either individually (with -f or -u) or as a document tree to search (with
@@ -88,10 +88,43 @@ ANNOT_ORDER = (
 UriPrefix = namedtuple('UriPrefix', ['directory', 'prefix'])
 """Utility class for option data mapping URI prefixes."""
 
+
+def _add_verbose_option(parser):
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        action='count',
+        default=0,
+        help="Increase verbosity; can passed twice for full debug output.",
+    )
+
+
+def _add_strip_suffixes_option(parser):
+    parser.add_argument(
+        '-x',
+        '--strip-suffixes',
+        nargs='*',
+        default=('.json', '.yaml', '.yml'),
+        help="For documents loaded with -f or -u without an explict URI "
+            "assigned on the command line, assign a URI by stripping any "
+            "of the given suffixes from the document's URL; passing this "
+            "option without any suffixes disables this behavior, treating "
+            "the unmodified URL as the URI; the default stripped suffixes "
+            "are .json, .yaml, .yml",
+    )
+
+
 # TODO: URI vs IRI confusion... again...
 class ThingToUri:
-    def __init__(self, values: Union[str, Sequence[str]]) -> None:
-        logger.debug(f'parsing ThingToUri value {values!r}')
+    def __init__(
+        self,
+        values: Union[str, Sequence[str]],
+        strip_suffixes: Sequence[str] = (),
+    ) -> None:
+        logger.debug(
+            f'Parsing ThingToUri option with argument {values!r}, '
+            f'stripping suffixes: {strip_suffixes}',
+        )
         try:
             if isinstance(values, str):
                 values = [values]
@@ -99,6 +132,7 @@ class ThingToUri:
                 raise ValueError(f'Expected 1 or 2 values, got {len(values)}')
 
             self._values = values
+            self._to_strip = strip_suffixes
 
             thing = self.set_thing(values[0])
             if len(values) == 2:
@@ -107,7 +141,9 @@ class ThingToUri:
                     f'Using URI <{iri_str}> from command line for "{thing}"'
                 )
             else:
-                iri_str = self.iri_str_from_thing()
+                iri_str = self.iri_str_from_thing(
+                    self.strip_suffixes(thing),
+                )
                 logger.debug(
                     f'Calculated URI <{iri_str}> for "{thing}"'
                 )
@@ -129,6 +165,13 @@ class ThingToUri:
 
     def __str__(self):
         return f'(thing: {self._values[0]}, uri: <{self.uri}>)'
+
+    def strip_suffixes(self, thing: Any) -> str:
+        thing_string = str(thing)
+        for suffix in self._to_strip:
+            if thing_string.ends_with(suffix):
+                return thing_string[:len(suffix)]
+        return thing_string
 
     def set_thing(self, thing_str) -> Any:
         self.thing = thing_str
@@ -154,8 +197,8 @@ class ThingToUri:
                 # propagate the original error as it will be more informative
                 raise e1
 
-    def iri_str_from_thing(self) -> str:
-        return self._values[0]
+    def iri_str_from_thing(self, stripped_thing_str: str) -> str:
+        return stripped_thing_str
 
 
 class PathToUri(ThingToUri):
@@ -166,9 +209,10 @@ class PathToUri(ThingToUri):
         self.path = Path(thing_str).resolve()
         return self.path
 
-    def iri_str_from_thing(self) -> str:
-        # TODO: Suffixes
-        return self.path.as_uri()
+    def iri_str_from_thing(self, stripped_thing_str: str) -> str:
+        # It seems odd to rebuild the path object, but Path.with_suffix('')
+        # doesn't care what suffix is removed, so we couldn't use it anyway
+        return Path(stripped_thing_str).resolve().as_uri()
 
 
 class UrlToUri(ThingToUri):
@@ -179,9 +223,76 @@ class UrlToUri(ThingToUri):
         self.set_iri(thing_str, attrname='url')
         return self.url
 
-    def iri_str_from_thing(self) -> str:
-        # TODO: Suffixes
-        return str(self.url)
+
+class CustomArgumentParser(argparse.ArgumentParser):
+    def _fix_message(self, message):
+        # nargs=+ does not support metavar=tuple
+        return message.replace(
+            'INITIAL [INITIAL ...]',
+            'FILE|URL [URI]',
+        ).replace(
+            'FILES [FILES ...]',
+            'FILE [URI] [TYPE]',
+        ).replace(
+            'DIRECTORIES [DIRECTORIES ...]',
+            'DIRECTORY [URI_PREFIX]',
+        ).replace(
+            'URLS [URLS ...]',
+            'URL [URI] [TYPE]',
+        ).replace(
+            'PREFIXES [PREFIXES ...]',
+            'URL_PREFIX [URI_PREFIX]',
+        )
+
+    def format_usage(self):
+        return self._fix_message(super().format_usage())
+
+    def format_help(self):
+        return self._fix_message(super().format_help())
+
+class AppendThingToUri(argparse.Action):
+    @classmethod
+    def make_action(
+        cls,
+        arg_cls: Type[ThingToUri] = ThingToUri,
+        strip_suffixes: Sequence[str] = (),
+    ):
+        logger.debug(f'Registering {arg_cls.__name__} argument action')
+        return lambda *args, **kwargs: cls(
+            *args,
+            arg_cls=arg_cls,
+            strip_suffixes=strip_suffixes,
+            **kwargs,
+        )
+
+    def __init__(
+        self,
+        option_strings: str,
+        dest: str,
+        *,
+        nargs: Optional[str] = None,
+        arg_cls: Type[ThingToUri],
+        strip_suffixes: Sequence[str],
+        **kwargs
+    ) -> None:
+        if nargs != '+':
+            raise ValueError(
+                f'{type(self).__name__}: expected nargs="+"'
+            )
+        self._arg_cls = arg_cls
+        self._strip_suffixes = strip_suffixes
+        super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if (
+            not hasattr(namespace, self.dest) or
+            getattr(namespace, self.dest) is None
+        ):
+            logger.debug('Initializing arg attr for {self.dest}')
+            setattr(namespace, self.dest, [])
+
+        arg_list = getattr(namespace, self.dest)
+        arg_list.append(self._arg_cls(values))
 
 
 class ApiDescription:
@@ -594,81 +705,8 @@ class ApiDescription:
 
     @classmethod
     def load(cls):
-        class CustomArgumentParser(argparse.ArgumentParser):
-            def _fix_message(self, message):
-                # nargs=+ does not support metavar=tuple
-                return message.replace(
-                    'INITIAL [INITIAL ...]',
-                    'FILE|URL [URI]',
-                ).replace(
-                    'FILES [FILES ...]',
-                    'FILE [URI] [TYPE]',
-                ).replace(
-                    'DIRECTORIES [DIRECTORIES ...]',
-                    'DIRECTORY [URI_PREFIX]',
-                ).replace(
-                    'URLS [URLS ...]',
-                    'URL [URI] [TYPE]',
-                ).replace(
-                    'PREFIXES [PREFIXES ...]',
-                    'URL_PREFIX [URI_PREFIX]',
-                )
-
-            def format_usage(self):
-                return self._fix_message(super().format_usage())
-
-            def format_help(self):
-                return self._fix_message(super().format_help())
-
-        class AppendThingToUri(argparse.Action):
-            @classmethod
-            def make_action(cls, arg_cls: Type[ThingToUri] = ThingToUri):
-                logger.debug(f'Registering {arg_cls.__name__} argument action')
-                return lambda *args, **kwargs: \
-                    cls(*args, arg_cls=arg_cls, **kwargs)
-
-            def __init__(
-                self,
-                option_strings: str,
-                dest: str,
-                *,
-                nargs: Optional[str] = None,
-                arg_cls: Type[ThingToUri],
-                **kwargs
-            ) -> None:
-                if nargs != '+':
-                    raise ValueError(
-                        f'{type(self).__name__}: expected nargs="+"'
-                    )
-                self._arg_cls = arg_cls
-                super().__init__(option_strings, dest, nargs=nargs, **kwargs)
-
-            def __call__(self, parser, namespace, values, option_string=None):
-                if (
-                    not hasattr(namespace, self.dest) or
-                    getattr(namespace, self.dest) is None
-                ):
-                    logger.debug('Initializing arg attr for {self.dest}')
-                    setattr(namespace, self.dest, [])
-
-                arg_list = getattr(namespace, self.dest)
-                arg_list.append(self._arg_cls(values))
-
         verbosity_parser = argparse.ArgumentParser(add_help=False)
-        verbosity_option_args = (
-            '-v',
-            '--verbose',
-        )
-        verbosity_option_kwargs = {
-            'action': 'count',
-            'default': 0,
-            'help':
-                "Increase verbosity; can passed twice for full debug output.",
-        }
-        verbosity_parser.add_argument(
-            *verbosity_option_args,
-            **verbosity_option_kwargs,
-        )
+        _add_verbose_option(verbosity_parser)
         v_args, remaining_args = verbosity_parser.parse_known_args()
 
         if v_args.verbose:
@@ -682,18 +720,20 @@ class ApiDescription:
         else:
             logging.basicConfig(level=logging.WARN)
 
+        strip_suffixes_parser = argparse.ArgumentParser(add_help=False)
+        _add_strip_suffixes_option(strip_suffixes_parser)
+        ss_args, remaining_args = strip_suffixes_parser.parse_known_args(
+            remaining_args,
+        )
+
         parser = CustomArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=HELP_PROLOG,
             epilog=HELP_EPILOG,
             fromfile_prefix_chars='@',
         )
-        # Already parsed by verbosity_parser, but added here
-        # to include it in the usage message.
-        parser.add_argument(
-            *verbosity_option_args,
-            **verbosity_option_kwargs,
-        )
+        # Already parsed, but add to include in usage message
+        _add_verbose_option(parser)
         parser.add_argument(
             '-i',
             '--initial-document',
@@ -710,7 +750,10 @@ class ApiDescription:
             '-f',
             '--file',
             nargs='+',
-            action=AppendThingToUri.make_action(arg_cls=PathToUri),
+            action=AppendThingToUri.make_action(
+                arg_cls=PathToUri,
+                strip_suffixes=ss_args.strip_suffixes,
+            ),
             dest='files',
             help="An APID document as a local file, optionally followed by "
                  "a URI to use for reference resolution in place of the "
@@ -721,25 +764,18 @@ class ApiDescription:
             '-u',
             '--url',
             nargs='+',
-            action=AppendThingToUri.make_action(arg_cls=UrlToUri),
+            action=AppendThingToUri.make_action(
+                arg_cls=UrlToUri,
+                strip_suffixes=ss_args.strip_suffixes,
+            ),
             dest='urls',
             help="A URL for an APID document, optionally followed by a URI "
                  "to use for reference resolution; by default only 'http:' "
                  "and 'https:' URLs are supported; this option can be "
                  "repeated; see also -x",
         )
-        parser.add_argument(
-            '-x',
-            '--strip-suffixes',
-            nargs='*',
-            default=('.json', '.yaml', '.yml'),
-            help="For documents loaded with -f or -u without an explict URI "
-                "assigned on the command line, assign a URI by stripping any "
-                "of the given suffixes from the document's URL; passing this "
-                "option without any suffixes disables this behavior, treating "
-                "the unmodified URL as the URI; the default stripped suffixes "
-                "are .json, .yaml, .yml",
-        )
+        # Already parsed, but add to include in usage message
+        _add_strip_suffixes_option(parser)
         parser.add_argument(
             '-d',
             '--directory',
@@ -747,8 +783,7 @@ class ApiDescription:
             action=AppendThingToUri.make_action(arg_cls=PathToUri),
             default=[],
             dest='directories',
-            help="Resolve references matching the URI prefix from the given "
-                "directory; if no URI prefix is provided, use the 'file:' URL "
+            help="Resolve references matching the URI prefix from the given " "directory; if no URI prefix is provided, use the 'file:' URL "
                 "corresponding to the directory as the prefix; this option "
                 "can be repeated; see also -D",
         )
