@@ -5,7 +5,9 @@ from pathlib import Path
 import urllib
 from uuid import uuid4
 from collections import defaultdict, namedtuple
-from typing import Any, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
+from typing import (
+    Any, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
+)
 import logging
 import os
 import sys
@@ -120,6 +122,7 @@ class ThingToUri:
         self,
         values: Union[str, Sequence[str]],
         strip_suffixes: Sequence[str] = (),
+        uri_is_prefix: bool = False,
     ) -> None:
         logger.debug(
             f'Parsing ThingToUri option with argument {values!r}, '
@@ -133,6 +136,7 @@ class ThingToUri:
 
             self._values = values
             self._to_strip = strip_suffixes
+            self._uri_is_prefix = uri_is_prefix
 
             thing = self.set_thing(values[0])
             if len(values) == 2:
@@ -147,7 +151,19 @@ class ThingToUri:
                 logger.debug(
                     f'Calculated URI <{iri_str}> for "{thing}"'
                 )
+
+            if uri_is_prefix and not iri_str.endswith('/'):
+                raise ValueError(
+                    f"URI prefix <{iri_str}> must have a path ending in '/'",
+                )
+
             self.set_iri(iri_str)
+
+            if uri_is_prefix and self.uri.query or self.uri.fragment:
+                raise ValueError(
+                    f"URI prefix <{self.uri}> may not include "
+                    "a query or fragment",
+                )
 
         except Exception:
             # argparse suppresses any exceptions that are raised
@@ -207,6 +223,11 @@ class PathToUri(ThingToUri):
 
     def set_thing(self, thing_str: str) -> None:
         self.path = Path(thing_str).resolve()
+        if self._uri_is_prefix and not self.path.is_dir():
+            raise ValueError(
+                f"Path '{self.path}' must be a directory when mapping "
+                "to a URI prefix",
+            )
         return self.path
 
     def iri_str_from_thing(self, stripped_thing_str: str) -> str:
@@ -250,7 +271,8 @@ class CustomArgumentParser(argparse.ArgumentParser):
     def format_help(self):
         return self._fix_message(super().format_help())
 
-class AppendThingToUri(argparse.Action):
+
+class ActionAppendThingToUri(argparse.Action):
     @classmethod
     def make_action(
         cls,
@@ -616,10 +638,10 @@ class ApiDescription:
 
         for p in prefixes:
             try:
-                rel = full_path.relative_to(p.directory)
-                uri = rid.Iri(str(p.prefix) + str(rel.with_suffix('')))
+                rel = full_path.relative_to(p.path)
+                uri = rid.Iri(str(p.uri) + str(rel.with_suffix('')))
                 logger.debug(
-                    f'...assigning URI <{uri}> using prefix <{p.prefix}>',
+                    f'...assigning URI <{uri}> using prefix <{p.uri}>',
                 )
             except ValueError:
                 pass
@@ -652,43 +674,6 @@ class ApiDescription:
             'uri': uri,
             'oastype': oastype,
         }
-
-    @classmethod
-    def _process_prefix(cls, p):
-        directory, prefix = p.path, p.uri
-        # try:
-        #     prefix = rid.Iri(prefix)
-        # except ValueError:
-        #     try:
-        #         rid.IriReference(prefix)
-        #         raise ValueError(f'URI prefixes cannot be relative: <{p[0]}>')
-        #     except ValueError:
-        #         raise ValueError(
-        #             f'URI prefix <{p[0]}> does not appear to be a URI'
-        #         )
-
-        if prefix.scheme == 'file':
-            raise ValueError(
-                f"'file:' URIs cannot be used as URI prefixes: <{p[0]}>"
-            )
-        if prefix.query or prefix.fragment:
-            raise ValueError(
-                "URI prefixes cannot contain a query or fragment: "
-                f"<{p[0]}>"
-            )
-        if not prefix.path.endswith('/'):
-            raise ValueError(
-                "URI prefixes must include a path that ends with '/': "
-                f"<{p[0]}>"
-            )
-
-        path = Path(directory).resolve()
-        if not path.is_dir():
-            raise ValueError(
-                "Path mapped to URI prefix must be an existing "
-                f"directory: {type(p).__name__} {p}"
-            )
-        return UriPrefix(prefix=prefix, directory=path)
 
     @classmethod
     def _url_for(cls, uri):
@@ -750,7 +735,7 @@ class ApiDescription:
             '-f',
             '--file',
             nargs='+',
-            action=AppendThingToUri.make_action(
+            action=ActionAppendThingToUri.make_action(
                 arg_cls=PathToUri,
                 strip_suffixes=ss_args.strip_suffixes,
             ),
@@ -764,7 +749,7 @@ class ApiDescription:
             '-u',
             '--url',
             nargs='+',
-            action=AppendThingToUri.make_action(
+            action=ActionAppendThingToUri.make_action(
                 arg_cls=UrlToUri,
                 strip_suffixes=ss_args.strip_suffixes,
             ),
@@ -780,7 +765,7 @@ class ApiDescription:
             '-d',
             '--directory',
             nargs='+',
-            action=AppendThingToUri.make_action(arg_cls=PathToUri),
+            action=ActionAppendThingToUri.make_action(arg_cls=PathToUri),
             default=[],
             dest='directories',
             help="Resolve references matching the URI prefix from the given " "directory; if no URI prefix is provided, use the 'file:' URL "
@@ -791,7 +776,7 @@ class ApiDescription:
             '-p',
             '--url-prefix',
             nargs='+',
-            action=AppendThingToUri.make_action(arg_cls=UrlToUri),
+            action=ActionAppendThingToUri.make_action(arg_cls=UrlToUri),
             default=[],
             dest='prefixes',
             help="Resolve references the URI prefix by replacing it with "
@@ -888,7 +873,9 @@ class ApiDescription:
             ('initial_document', '-i', lambda arg: True),
             ('urls', '-u', lambda arg: True),
             ('url_prefxies', '-p', lambda arg: True),
-            ('dir_suffixes', '-D', lambda arg: arg == ('.json', '.yaml', '.yml')),
+            ('dir_suffixes', '-D', lambda arg: arg == (
+                '.json', '.yaml', '.yml',
+            )),
             ('url_suffixes', '-P', lambda arg: arg == ()),
             ('output_file', '-O', lambda arg: True),
             ('store', '-t', lambda arg: True),
@@ -898,17 +885,11 @@ class ApiDescription:
 
         try:
             # TODO: prefixes -> directories migration/split
-            prefixes = [cls._process_prefix(p) for p in args.directories]
+            prefixes = args.directories
         except ValueError as e:
             logger.error(str(e))
             sys.exit(-1)
 
-        [
-            [
-                PathToUri(['tutorial/references']),
-                PathToUri(['https://example.com/']),
-            ]
-        ]
         # Reverse sort so that the first matching prefix is the longest
         # TODO: At some point I switched the tuple order, does this still work?
         prefixes.sort(reverse=True)
