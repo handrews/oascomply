@@ -512,6 +512,9 @@ class ApiDescription:
                     'FILES [FILES ...]',
                     'FILE [URI] [TYPE]',
                 ).replace(
+                    'DIRECTORIES [DIRECTORIES ...]',
+                    'DIRECTORY [URI_PREFIX]',
+                ).replace(
                     'URLS [URLS ...]',
                     'URL [URI] [TYPE]',
                 ).replace(
@@ -524,6 +527,24 @@ class ApiDescription:
 
             def format_help(self):
                 return self._fix_message(super().format_help())
+
+        class AppendTuple(argparse.Action):
+            def __init__(self, option_strings, dest, nargs=None, **kwargs):
+                if nargs != '+':
+                    raise ValueError(
+                        f'{type(self).__name__}: expected nargs="+"'
+                    )
+                super().__init__(option_strings, dest, **kwargs)
+
+            def __call__(self, parser, namespace, values, option_string=None):
+                if len(values) not in (1, 2):
+                    raise ValueError(
+                        f'{type(self).__name__}: expected 1 or 2 arguments, '
+                        f'got {len(values)}'
+                    )
+                if not hasattr(namespace, self.dest):
+                    setattr(namespace, self.dest, [])
+                getattr(namespace, self.dest).append(values)
 
         parser = CustomArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -580,13 +601,14 @@ class ApiDescription:
         parser.add_argument(
             '-d',
             '--directory',
-            nargs=2,
-            metavar=('DIRECTORY', 'URI_PREFIX'),
+            nargs='+',
             action='append',
             default=[],
             dest='directories',
             help="Resolve references matching the URI prefix from the given "
-                "directory; this option can be repeated; see also -D",
+                "directory; if no URI prefix is provided, use the 'file:' URL "
+                "corresponding to the directory as the prefix; this option "
+                "can be repeated; see also -D",
         )
         parser.add_argument(
             '-p',
@@ -596,7 +618,7 @@ class ApiDescription:
             default=[],
             dest='prefixes',
             help="Resolve references the URI prefix by replacing it with "
-                "the given URL prefix; or directly from URLs matching the "
+                "the given URL prefix, or directly from URLs matching the "
                 "URL prefix if no URI prefix is provided; this option can be "
                 "repeated; see also -P",
         )
@@ -615,7 +637,7 @@ class ApiDescription:
             '-P',
             '--url-prefix-suffixes',
             nargs='*',
-            default=('.json', '.yaml', '.yml'),
+            default=(),
             help="When resolving references using -p, try appending each "
                 "suffix in order to the URL until one succeeds; the empty "
                 "string can be passed to try loading the unmodified URL "
