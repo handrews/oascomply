@@ -627,6 +627,7 @@ class ApiDescription:
             '--directory-suffixes',
             nargs='*',
             default=('.json', '.yaml', '.yml'),
+            dest='dir_suffixes',
             help="When resolving references using -d, try appending each "
                 "suffix in order to the file path until one succeeds; "
                 "the empty string can be passed to try loading the "
@@ -638,6 +639,7 @@ class ApiDescription:
             '--url-prefix-suffixes',
             nargs='*',
             default=(),
+            dest='url_suffixes',
             help="When resolving references using -p, try appending each "
                 "suffix in order to the URL until one succeeds; the empty "
                 "string can be passed to try loading the unmodified URL "
@@ -714,8 +716,21 @@ class ApiDescription:
         strip_suffix = not bool(args.strip_suffixes)
         logger.debug(f'Processed arguments:\n{args}')
 
-        if args.initial_document:
-            raise NotImplementedError('-i option not yet implemented')
+        # Note that if -P or -D are actually passed with
+        # the args matching the default, this check will
+        # still work as they will be set as a list instead
+        # of the default values which are tuples
+        for attr, opt, check in (
+            ('initial_document', '-i', lambda arg: True),
+            ('urls', '-u', lambda arg: True),
+            ('url_prefxies', '-p', lambda arg: True),
+            ('dir_suffixes', '-D', lambda arg: arg == ('.json', '.yaml', '.yml')),
+            ('url_suffixes', '-P', lambda arg: arg == ()),
+            ('output_file', '-O', lambda arg: True),
+            ('store', '-t', lambda arg: True),
+        ):
+            if hasattr(args, attr) and not check(getattr(args, attr)):
+                raise NotImplementedError(f'{opt} option not yet implemented!')
 
         try:
             # TODO: prefixes -> directories migration/split
