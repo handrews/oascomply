@@ -5,7 +5,7 @@ from pathlib import Path
 import urllib
 from uuid import uuid4
 from collections import defaultdict, namedtuple
-from typing import Any, Iterator, Mapping, Optional, Tuple, Type, Union
+from typing import Any, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
 import logging
 import os
 import sys
@@ -87,6 +87,102 @@ ANNOT_ORDER = (
 
 UriPrefix = namedtuple('UriPrefix', ['directory', 'prefix'])
 """Utility class for option data mapping URI prefixes."""
+
+# TODO: URI vs IRI confusion... again...
+class ThingToUri:
+    def __init__(self, values: Union[str, Sequence[str]]) -> None:
+        logger.debug(f'parsing ThingToUri value {values!r}')
+        try:
+            if isinstance(values, str):
+                values = [values]
+            if len(values) not in (1, 2):
+                raise ValueError(f'Expected 1 or 2 values, got {len(values)}')
+
+            self._values = values
+
+            thing = self.set_thing(values[0])
+            if len(values) == 2:
+                iri_str = values[1]
+                logger.debug(
+                    f'Using URI <{iri_str}> from command line for "{thing}"'
+                )
+            else:
+                iri_str = self.iri_str_from_thing()
+                logger.debug(
+                    f'Calculated URI <{iri_str}> for "{thing}"'
+                )
+            self.set_iri(iri_str)
+
+        except Exception:
+            # argparse suppresses any exceptions that are raised
+            import traceback
+            from io import StringIO
+
+            buffer = StringIO()
+            traceback.print_exc(file=buffer)
+            logger.warning(buffer.getvalue())
+
+            raise
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self._values!r})'
+
+    def __str__(self):
+        return f'(thing: {self._values[0]}, uri: <{self.uri}>)'
+
+    def set_thing(self, thing_str) -> Any:
+        self.thing = thing_str
+        return thing_str
+
+    def set_iri(
+        self,
+        iri_str: str,
+        iri_class: Type[rid.Iri] = rid.Iri,
+        attrname: str = 'uri',
+    ) -> None:
+        try:
+            setattr(self, attrname, iri_class(iri_str))
+        except ValueError as e1:
+            try:
+                rid.IriReference(iri_str)
+                raise ValueError(f'{iri_class.__name__} cannot be relative')
+            except ValueError as e2:
+                logger.debug(
+                    f'got exception from IriReference({iri_str}):'
+                    f'\n\t{e2}'
+                )
+                # propagate the original error as it will be more informative
+                raise e1
+
+    def iri_str_from_thing(self) -> str:
+        return self._values[0]
+
+
+class PathToUri(ThingToUri):
+    def __str__(self):
+        return f'(path: {self.path}, uri: <{self.uri}>)'
+
+    def set_thing(self, thing_str: str) -> None:
+        self.path = Path(thing_str).resolve()
+        return self.path
+
+    def iri_str_from_thing(self) -> str:
+        # TODO: Suffixes
+        return self.path.as_uri()
+
+
+class UrlToUri(ThingToUri):
+    def __str__(self):
+        return f'(url: {self.url}, uri: <{self.uri}>)'
+
+    def set_thing(self, thing_str: str) -> None:
+        self.set_iri(thing_str, attrname='url')
+        return self.url
+
+    def iri_str_from_thing(self) -> str:
+        # TODO: Suffixes
+        return str(self.url)
+
 
 class ApiDescription:
     """
@@ -390,26 +486,22 @@ class ApiDescription:
         create_source_map,
         strip_suffix,
     ):
-        path = Path(filearg[0])
+        path = filearg.path
         full_path = path.resolve()
         oastype = None
         uri = None
         logger.debug(
             f'Processing {full_path!r}, strip_suffix={strip_suffix}...'
         )
-        if len(filearg) > 1:
+        if filearg.uri is not None:
             try:
-                uri = rid.IriWithJsonPtr(filearg[1])
+                uri = rid.IriWithJsonPtr(str(filearg.uri))
                 logger.debug(f'...assigning URI <{uri}> from 2nd arg')
             except ValueError:
+                assert False, 'should not be using TYPE in URI slot'
                 # TODO: Verify OAS type
-                oastype = filearg[1]
+                oastype = filearg.uri
                 logger.debug(f'...assigning OAS type "{oastype}" from 2nd arg')
-        if len(filearg) > 2:
-            if uri is None:
-                raise ValueError('2nd of 3 -f args must be URI')
-            oastype = filearg[2]
-            logger.debug(f'...assigning OAS type "{oastype}" from 3rd arg')
 
         for p in prefixes:
             try:
@@ -452,17 +544,17 @@ class ApiDescription:
 
     @classmethod
     def _process_prefix(cls, p):
-        directory, prefix = p
-        try:
-            prefix = rid.Iri(prefix)
-        except ValueError:
-            try:
-                rid.IriReference(prefix)
-                raise ValueError(f'URI prefixes cannot be relative: <{p[0]}>')
-            except ValueError:
-                raise ValueError(
-                    f'URI prefix <{p[0]}> does not appear to be a URI'
-                )
+        directory, prefix = p.path, p.uri
+        # try:
+        #     prefix = rid.Iri(prefix)
+        # except ValueError:
+        #     try:
+        #         rid.IriReference(prefix)
+        #         raise ValueError(f'URI prefixes cannot be relative: <{p[0]}>')
+        #     except ValueError:
+        #         raise ValueError(
+        #             f'URI prefix <{p[0]}> does not appear to be a URI'
+        #         )
 
         if prefix.scheme == 'file':
             raise ValueError(
@@ -483,7 +575,7 @@ class ApiDescription:
         if not path.is_dir():
             raise ValueError(
                 "Path mapped to URI prefix must be an existing "
-                f"directory: {p[1]!r}"
+                f"directory: {type(p).__name__} {p}"
             )
         return UriPrefix(prefix=prefix, directory=path)
 
@@ -528,29 +620,79 @@ class ApiDescription:
             def format_help(self):
                 return self._fix_message(super().format_help())
 
-        class AppendTuple(argparse.Action):
-            def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        class AppendThingToUri(argparse.Action):
+            @classmethod
+            def make_action(cls, arg_cls: Type[ThingToUri] = ThingToUri):
+                logger.debug(f'Registering {arg_cls.__name__} argument action')
+                return lambda *args, **kwargs: \
+                    cls(*args, arg_cls=arg_cls, **kwargs)
+
+            def __init__(
+                self,
+                option_strings: str,
+                dest: str,
+                *,
+                nargs: Optional[str] = None,
+                arg_cls: Type[ThingToUri],
+                **kwargs
+            ) -> None:
                 if nargs != '+':
                     raise ValueError(
                         f'{type(self).__name__}: expected nargs="+"'
                     )
-                super().__init__(option_strings, dest, **kwargs)
+                self._arg_cls = arg_cls
+                super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
             def __call__(self, parser, namespace, values, option_string=None):
-                if len(values) not in (1, 2):
-                    raise ValueError(
-                        f'{type(self).__name__}: expected 1 or 2 arguments, '
-                        f'got {len(values)}'
-                    )
-                if not hasattr(namespace, self.dest):
+                if (
+                    not hasattr(namespace, self.dest) or
+                    getattr(namespace, self.dest) is None
+                ):
+                    logger.debug('Initializing arg attr for {self.dest}')
                     setattr(namespace, self.dest, [])
-                getattr(namespace, self.dest).append(values)
+
+                arg_list = getattr(namespace, self.dest)
+                arg_list.append(self._arg_cls(values))
+
+        verbosity_parser = argparse.ArgumentParser(add_help=False)
+        verbosity_option_args = (
+            '-v',
+            '--verbose',
+        )
+        verbosity_option_kwargs = {
+            'action': 'count',
+            'default': 0,
+            'help':
+                "Increase verbosity; can passed twice for full debug output.",
+        }
+        verbosity_parser.add_argument(
+            *verbosity_option_args,
+            **verbosity_option_kwargs,
+        )
+        v_args, remaining_args = verbosity_parser.parse_known_args()
+
+        if v_args.verbose:
+            oascomply_logger = logging.getLogger('oascomply')
+            if v_args.verbose == 1:
+                # oascomply_logger.setLevel(logging.INFO)
+                logging.basicConfig(level=logging.INFO)
+            else:
+                # oascomply_logger.setLevel(logging.DEBUG)
+                logging.basicConfig(level=logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.WARN)
 
         parser = CustomArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=HELP_PROLOG,
             epilog=HELP_EPILOG,
             fromfile_prefix_chars='@',
+        )
+        # Already parsed by verbosity_parser, but added here
+        # to include it in the usage message.
+        parser.add_argument(
+            *verbosity_option_args,
+            **verbosity_option_kwargs,
         )
         parser.add_argument(
             '-i',
@@ -568,7 +710,7 @@ class ApiDescription:
             '-f',
             '--file',
             nargs='+',
-            action='append',
+            action=AppendThingToUri.make_action(arg_cls=PathToUri),
             dest='files',
             help="An APID document as a local file, optionally followed by "
                  "a URI to use for reference resolution in place of the "
@@ -579,7 +721,7 @@ class ApiDescription:
             '-u',
             '--url',
             nargs='+',
-            action='append',
+            action=AppendThingToUri.make_action(arg_cls=UrlToUri),
             dest='urls',
             help="A URL for an APID document, optionally followed by a URI "
                  "to use for reference resolution; by default only 'http:' "
@@ -602,7 +744,7 @@ class ApiDescription:
             '-d',
             '--directory',
             nargs='+',
-            action='append',
+            action=AppendThingToUri.make_action(arg_cls=PathToUri),
             default=[],
             dest='directories',
             help="Resolve references matching the URI prefix from the given "
@@ -614,7 +756,7 @@ class ApiDescription:
             '-p',
             '--url-prefix',
             nargs='+',
-            action='append',
+            action=AppendThingToUri.make_action(arg_cls=UrlToUri),
             default=[],
             dest='prefixes',
             help="Resolve references the URI prefix by replacing it with "
@@ -689,13 +831,6 @@ class ApiDescription:
                  "TODO: Support storing to various kinds of databases.",
         )
         parser.add_argument(
-            '-v',
-            '--verbose',
-            action='count',
-            default=0,
-            help="Increase verbosity; can passed twice for full debug output.",
-        )
-        parser.add_argument(
             '--test-mode',
             action='store_true',
             help="Omit data such as 'locatedAt' that will change for "
@@ -703,14 +838,8 @@ class ApiDescription:
                  "This is intended to facilitate "
                  "automated testing of the entire system.",
         )
-        args = parser.parse_args()
-        if args.verbose:
-            if args.verbose == 1:
-                logging.basicConfig(level=logging.INFO)
-            else:
-                logging.basicConfig(level=logging.DEBUG)
-        else:
-            logging.basicConfig(level=logging.WARN)
+
+        args = parser.parse_args(remaining_args)
 
         # TODO: Fix temporary hack
         strip_suffix = not bool(args.strip_suffixes)
@@ -739,6 +868,12 @@ class ApiDescription:
             logger.error(str(e))
             sys.exit(-1)
 
+        [
+            [
+                PathToUri(['tutorial/references']),
+                PathToUri(['https://example.com/']),
+            ]
+        ]
         # Reverse sort so that the first matching prefix is the longest
         # TODO: At some point I switched the tuple order, does this still work?
         prefixes.sort(reverse=True)
