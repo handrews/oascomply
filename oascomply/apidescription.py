@@ -17,7 +17,7 @@ import jschon
 import rdflib
 from rdflib.namespace import RDF
 
-from oascomply import schema_catalog
+import oascomply
 from oascomply.oasgraph import (
     OasGraph, OasGraphResult, OUTPUT_FORMATS_LINE, OUTPUT_FORMATS_STRUCTURED,
 )
@@ -460,10 +460,17 @@ class ApiDescription:
             self._sources[uri] = sourcemap
         self._g.add_resource(url, uri, filename=path.name)
 
-    def get_resource(self, uri: Union[str, rid.Iri], cacheid: str = 'default') -> Optional[Any]:
+    def get_resource(
+        self,
+        uri: Union[str, rid.Iri],
+        cacheid: str = 'default',
+    ) -> Optional[jschon.JSON]:
         logger.debug(f"Retrieving '{uri}' from cache '{cacheid}'")
         # TODO: URI library confusion
-        return schema_catalog.get_resource(jschon.URI(str(uri)), cacheid=cacheid)
+        return oascomply.catalog.get_resource(
+            jschon.URI(str(uri)),
+            cacheid=cacheid,
+        )
 
     def get_sourcemap(self, uri: Union[str, rid.Iri]):
         if not isinstance(uri, rid.IriWithJsonPtr):
