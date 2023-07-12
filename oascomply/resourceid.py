@@ -24,14 +24,13 @@ class ResourceIdentifier:
         self._parsed = rfc3987.parse(str(identifier), rule=self._rule)
 
         # keep file:/ vs file:/// renderings consistent
-        # TODO: This uses file:/// as more familiar, but would it
-        #       be better to use file:/ as more correct per RFC 8089?
-        #       Older code might not like file:/ so use file:/// for now.
+        # TODO: Using file:/, but file:/// is more familiar?
+        #       jschon.URI seems to like file:/ ?
         if (
             self.scheme == 'file' and
-            self.authority is None
+            self.authority is ''
         ):
-            self._parsed['authority'] = ''
+            self._parsed['authority'] = None
             self._parsed = rfc3987.parse(rfc3987.compose(**self._parsed))
 
     def __eq__(self, other):
