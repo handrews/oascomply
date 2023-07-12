@@ -1,4 +1,4 @@
-from typing import Generator, Sequence, Tuple, Union
+from typing import Generator, Literal, Sequence, Tuple, Union
 from collections import namedtuple
 import re
 import jschon
@@ -20,6 +20,8 @@ RELATIVE_JSON_POINTER_TEMPLATE = (
     f'{PARENT_COUNT}{INDEX_MANIPULATION}(#|{JSON_POINTER_TEMPLATE})'
 )
 
+
+TemplateComponent = Union[JsonPtr, str, Literal[True]]
 
 TemplateResult = namedtuple(
     'TemplateResult',
@@ -61,7 +63,8 @@ class JsonPtrTemplate:
         # * Boolean True to request the name of the key or number
         #   of the index matching the previous variable; this can
         #   only occur as the last component
-        self._components= []
+        self._components: Sequence[TemplateComponent] = []
+
         currptr = JsonPtr()
         for s in segments:
             if s.startswith('{'):
@@ -97,7 +100,7 @@ class JsonPtrTemplate:
         _variables=None,
         _previous_variable=None,
     ) -> Generator[
-        Tuple[JsonPtr, jschon.JSON, Union[None, str, int]],
+        TemplateResult,
         None,
         None,
     ]:
