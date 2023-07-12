@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import re
 import logging
 import pathlib
 from os import PathLike
 from collections import defaultdict
-from typing import Hashable, Mapping, Sequence, Tuple, Type, Union
+from typing import Hashable, Mapping, Optional, Sequence, Tuple, Type, Union
+import json
 
 from jschon import JSON, JSONCompatible, JSONSchema, Result, URI
 from jschon.exc import CatalogError
@@ -32,100 +35,273 @@ import oascomply.resourceid as rid
 __all__ = [
     'OasCatalog',
     'OasJson',
-    'OasJsonError',
-    'OasJsonTypeError',
-    'OasJsonUnresolvableRefError',
-    'OasJsonRefSuffixError',
-
-    # Temporary while refactoring:
-    '_json_loadf',
-    '_yaml_loadf',
+    'MultiDirectMapSource',
+    'FileDirectMapSource',
+    'HttpDirectMapSource',
+    'FileMultiSuffixSource',
+    'HttpMultiSuffixSource',
 ]
 
 logger = logging.getLogger(__name__)
 
 
-class UrlMappingSourceMixin:
+PathString = str
+URIString = str
+URIReferenceString = str
+Suffix = str
+Content = str
+ContentWithUrlAndFormat = Tuple[
+    Content,
+    rid.Iri,
+    str,
+]
+
+JSONCompatibleWithURLAndSourceMap = Tuple[
+    JSONCompatible,
+    rid.Iri,
+    Union[dict, None],
+]
+
+
+class ResourceContentMixin:
+    @classmethod
+    def _load(cls, location: str):
+        raise NotImplementedError
+
+
+class FileContentMixin(ResourceContentMixin):
+    @classmethod
+    def _load(cls, full_path: PathString) -> Tuple[Content, rid.Iri]:
+        """Load a file, returning the contents and the retrieval URL"""
+        path = pathlib.Path(full_path)
+        try:
+            content = path.read_text(encoding='utf-8')
+            return content, rid.Iri(path.as_uri())
+        except OSError as e:
+            msg = f'Could not load {full_path!r}: '
+            if e.filename is not None:
+                # The filename for OSError is not included in
+                # the exception args, apparently for historical reasons.
+                raise CatalogError(
+                    msg + f'{e.strerror}: {e.filename!r}',
+                ) from e
+            raise CatalogError(msg) from e
+
+
+class HttpContentMixin(ResourceContentMixin):
+    @classmethod
+    def _load(cls, url: URIString) -> Tuple[Content, rid.Iri]:
+        raise NotImplementedError
+
+
+class ParseDataMixin:
+    @classmethod
+    def content_map(cls):
+        return {
+            None: cls._unknown_parse,
+            'application/json': cls._json_parse,
+            'application/openapi+json': cls._json_parse,
+            'application/schema+json': cls._json_parse,
+            'application/*+json': cls._json_parse,
+            'application/yaml': cls._yaml_parse,
+            'application/openapi+yaml': cls._yaml_parse,
+            'application/schema+yaml': cls._yaml_parse,
+            'application/*+yaml': cls._yaml_parse
+        }
+
+    @classmethod
+    def suffix_map(cls):
+        """Map of suffixes to callables for loading matching URIs."""
+        return {
+            '': cls._unknown_parse,
+            '.json': cls._json_parse,
+            '.yaml': cls._yaml_parse,
+            '.yml': cls._yaml_parse,
+        }
+
+    @classmethod
+    def _json_parse(
+        cls,
+        full_path: str,
+        create_source_map: bool = False,
+    ) -> JSONCompatibleWithURLAndSourceMap:
+        """Load a JSON file, optionally with source line and column map."""
+        sourcemap = None
+        content, url = cls._load(full_path)
+        try:
+            data = jschon.utils.json_loads(content)
+            if create_source_map:
+                logger.info(
+                    f'Creating JSON sourcemap for {path}, '
+                    '(can disable with -n if slow)',
+                )
+                sourcemap = jmap.calculate(content)
+            return data, url, sourcemap
+        except json.JSONDecodeError as e:
+            raise CatalogError(str(e)) from e
+
+    @classmethod
+    def _yaml_parse(
+        cls,
+        full_path: str,
+        create_source_map: bool = False,
+    ) -> JSONCompatibleWithURLAndSourceMap:
+        """Load a YAML file, optionally with source line and column map."""
+        sourcemap = None
+        logger.info(f"Loading {full_path} as YAML...")
+        content, url = cls._load(full_path)
+        try:
+            data = yaml.safe_load(content)
+            if create_source_map:
+                # The YAML source mapper gets confused sometimes,
+                # so just log a warning and work without the map.
+                try:
+                    logger.info(
+                        f'Creating YAML sourcemap for {path}, '
+                        '(can disable with -n if slow)',
+                    )
+                    sourcemap = ymap.calculate(content)
+                except InvalidYamlError:
+                    logger.warn(
+                        f"Unable to calculate source map for {path}",
+                    )
+            return data, url, sourcemap
+        except InvalidYamlError:
+            raise CatalogError(str(e)) from e
+
+    @classmethod
+    def _unknown_parse(
+        cls,
+        full_path: str,
+        create_source_map: bool = False,
+    ) -> JSONCompatibleWithURLAndSourceMap:
+        """
+        Load a file of unknown type by trying first JSON then YAML.
+        """
+        try:
+            return _json_parse(full_path, create_source_map)
+        except CatalogError as e1:
+            logger.warning(
+                f"Failed to parse file {full_path} of unknown type "
+                f"as JSON:\n\t{e1}",
+            )
+            try:
+                return _yaml_parse(full_path, create_source_map)
+            except CatalogError as e2:
+                logger.warning(
+                    f"Failed to parse file {full_path} of unknown type "
+                    f"as YAML:\n\t{e2}",
+                )
+                raise CatalogError(
+                    "Could not determine content type of '{full_path}'",
+                )
+
+
+class UrlAndSourceMapMixin:
+    """
+    Mixin for registering a shared map of URIs to other information.
+    Allows setting and reading a shared URI to URL map for external use.
+
+    The :class:`jschon.catalog.Catalog` interface does not allow returning
+    additional information with the resource data.  This class allows
+    registering dictionaries shared across a catalog's sources where
+    extra information (specifically the URL and optional source line and
+    column number map) can be stored for later easy lookup.  This information
+    is needed by :class:`OasJson`.
+
+    This also requires a property for the base URI under which the source
+    is registered in the catalog, in order to properly construct the
+    URI for use in the map, as only using relative URIs would cause
+    conflicts within the map when the same relative path might be used
+    with different sourcdes.
+    """
     @property
-    def uri_url_map(self):
+    def uri_url_map(self) -> Mapping[rid.Iri, rid.Iri]:
         """A map from requested URI to located URL, shared among sources"""
         return self._uri_url_map
 
     @uri_url_map.setter
-    def uri_url_map(self, mapping: Mapping[str, str]):
+    def uri_url_map(self, mapping: Mapping[rid.Iri, rid.Iri]):
         self._uri_url_map = mapping
 
     @property
-    def base_uri(self):
+    def uri_sourcemap_map(self) -> Mapping[rid.Iri, Optional[dict]]:
+        """A map from requested URI to source line/column number maps"""
+        return self._uri_sourcemap_map
+
+    @uri_sourcemap_map.setter
+    def uri_sourcemap_map(self, mapping: Optional[dict]) -> None:
+        self._uri_sourcemap_map = mapping
+
+    @property
+    def base_uri(self) -> URIString:
         """The base URI / URI prefix under which this source is registered."""
         return self._base_uri
 
     @base_uri.setter
-    def base_uri(self, bu):
-        self._base_uri = bu
-
-    def set_url(self, uri, source):
-        raise NotImplementedError
+    def base_uri(self, bu: URIString) -> None:
+        self._base_uri = '' if bu is None else bu
 
 
-def _loadf(full_path: str) -> Tuple[str, str]:
-    """Load a JSON file, optionally producing a source line and column map."""
-    path = pathlib.Path(full_path)
-    try:
-        content = path.read_text(encoding='utf-8')
-        return content, path.as_uri()
-    except FileNotFoundError as e:
-        raise CatalogError(f'{e.strerror}: {e.filename!r}')
+class MultiSuffixSource(Source, ParseDataMixin, UrlAndSourceMapMixin):
+    """
+    Source that appends each of a list of suffixes before attempting to load.
 
-    
-def _json_loadf(full_path, create_source_map=False):
-    sourcemap = None
-    content, url = _loadf(full_path)
-    data = jschon.utils.json_loads(content)
-    if create_source_map:
-        logger.info(
-            f'Creating JSON sourcemap for {path}, '
-            '(can disable with -n if slow)',
-        )
-        sourcemap = jmap.calculate(content)
-    return data, url, sourcemap
+    Subclasses are expected to map an appropriate callable to each supported
+    suffix, which can include an empty string for un-suffixed locations.
+    Non-empty suffixes MUST include any leading ``.`` character that
+    would not be present in the requested URI.
 
-def _yaml_loadf(full_path, create_source_map=False):
-    """Load a YAML file, optionally producing a source line and column map."""
-    sourcemap = None
-    content, url = _loadf(full_path)
-    data = yaml.safe_load(content)
-    if create_source_map:
-        # The YAML source mapper gets confused sometimes,
-        # so just log a warning and work without the map.
-        try:
-            logger.info(
-                f'Creating YAML sourcemap for {path}, '
-                '(can disable with -n if slow)',
-            )
-            sourcemap = ymap.calculate(content)
-        except InvalidYamlError:
-            logger.warn(
-                f"Unable to calculate source map for {path}",
-            )
-    return data, url, sourcemap
+    The content is returned from the first suffix that can be loaded
+    successfully.
 
+    :param suffixes: The list of suffixes to search in order.
+    """
+    def __init__(
+        self,
+        prefix: str,  # TODO: only include in sublcass init?
+        *,
+        suffixes: Sequence[Suffix] = ('', '.json', '.yaml'),
+        **kwargs,
+    ) -> None:
+        self._suffixes: Sequence[Suffix] = suffixes
+        """The suffixes to search, in order."""
 
-class MultiSuffixSource(Source):
-    suffix_map: dict = NotImplemented
+        super().__init__(**kwargs)
 
-    def __init__(self, *, suffixes: str = ('', '.json', '.yaml')):
-        self.suffixes = suffixes
-        super().__init__()
+    @property
+    def prefix(self) -> str:
+        """The prefix (e.g. directory or URL prefix) for relative paths)"""
+        return self._prefix
 
-    def search_suffixes(self, no_suffix_path):
-        for suffix in self.suffixes:
+    @prefix.setter
+    def prefix(self, p: str) -> None:
+        self._prefix = p
+
+    def _search_suffixes(
+        self,
+        no_suffix_path: URIReferenceString,
+    ) -> JSONCompatibleWithURLAndSourceMap:
+        """
+        Appends each suffix in turn, and attempts to load using the map.
+
+        :returns: A tuple of the loaded data followed by the URL from
+            which it was loaded.
+        :raise jschon.exc.CatalogError: if no suffix could be loaded
+            successfully.
+        """
+        for suffix in self._suffixes:
+            if suffix not in self._suffixes:
+                logger.debug(
+                    f'suffix {suffix} for {no_suffix_path} not in suffix map'
+                )
+                continue
+
             full_path = no_suffix_path + suffix
             try:
-                data = self.suffix_map[suffix](full_path)
-                return data, full_path
-            
-            except Exception as e:
+                return self.suffix_map()[suffix](full_path)
+
+            except CatalogError as e:
                 # TODO: Ideally not base Exception, but conditional import
                 #       of requests for remote source is challenging
                 logger.debug(
@@ -134,214 +310,175 @@ class MultiSuffixSource(Source):
                 )
         raise CatalogError(
             f"Could not find '{no_suffix_path}', "
-            f"checked extensions {self.suffixes}"
+            f"checked extensions {self._suffixes}"
         )
 
+    def __call__(self, relative_path: str):
+        data, url, sourcemap = self._search_suffixes(relative_path)
+        self.uri_url_map[relative_path] = url
+        self.uri_sourcemap_map[relative_path] = sourcemap
+        return data
 
-class FileMapMultiSuffixSource(MultiSuffixSource, UrlMappingSourceMixin):
-    suffix_map: dict = {
-        '': jschon.utils.json_loadf,
-        '.json': jschon.utils.json_loadf,
-        '.yaml': yaml.safe_load,
-        '.yml': yaml.safe_load,
-    }
+
+class DirectMapSource(Source, ParseDataMixin, UrlAndSourceMapMixin):
+    """Source for loading URIs with known exact locations."""
     def __init__(
         self,
-        file_map: dict,
+        location_map: Mapping[URIString, str],
         *,
-        suffixes=(None, '.json', '.yaml', '.yml'),
-    ) -> None:
-
-        super().__init__(suffixes=suffixes)
-        self._map = file_map.copy()
-
-    def __call__(self, relative_path):
-        data, full_path = self.search_suffixes(self._map[relative_path])
-        self.set_url(pathlib.Path(full_path).as_uri())
-
-
-class FileMultiSuffixSource(MultiSuffixSource, UrlMappingSourceMixin):
-    suffix_map: dict = {
-        '': jschon.utils.json_loadf,
-        '.json': jschon.utils.json_loadf,
-        '.yaml': yaml.safe_load,
-        '.yml': yaml.safe_load,
-    }
-
-    def _yaml_loadf(self, full_path):
-        with open(full_path) as fd:
-            return yaml.safe_load_
-
-    def __call__(self, relative_path):
-        data, full_path = self.search_suffixes(relative_path)
-        # self.uri_url_map[full_path] = self.to_url(
-
-    def do_the_thing(self, full_path, suffix):
-        with open(full_path) as fd:
-            return suffix_map[suffix](fd)
-
-    def to_url(self, relative_path):
-        return (pathlib.Path(self.base_dir) / relative_path).as_uri()
-            
-
-class HttpsMultiSuffixSource(MultiSuffixSource, UrlMappingSourceMixin):
-    suffix_map: {
-        None: jschon.utils.json_loadr,
-        '.json': jschon.utils.json_loadr,
-        '.yaml': NotImplemented,
-    }
-
-    def to_url(self, relative_path):
-        return self.base_url + relative_path
-
-
-class DirectMultiSuffixSource(UrlMappingSourceMixin):
-    def __init__(self, direct_map):
-        self._map = direct_map
-
-    def __call__(self, relative_path):
-        self.uri_url_map[relative_path] = self._map[relative_path]
-        return self._map[relative_path]
-
-class LocalMultiSuffixSource(UrlMappingSourceMixin):
-    """
-    Resource loader that searches for local files using a list of suffixes.
-
-    :param base_dir: The directory in which to search for relative paths
-    :param base_uri: The base URI / URI prefix under which this source
-        will be registered with the :class:`OasCatalog`.  This MUST
-        match the registered prefix so that mappings between resource
-        URLs and URIs can be determined.
-    :param suffixes: A list of suffixes, inlcuding the leading ``"."``,
-        to try in order to find a match; the list MUST have at least one
-        entry, but ``None`` is a valid entry for loading a non-suffixed file;
-        the default is ``[".json", ".yaml"]``
-        the resource was loaded, and the URI that was used to load it
-    """
-    def __init__(
-        self,
-        base_dir: Union[str, PathLike],
-        *,
-        base_uri: URI,
-        suffixes: Sequence[Union[str, None]] = ['.json', '.yaml'],
+        suffixes=(), # TODO: empty tuple not really right
         **kwargs,
     ) -> None:
-        if 'suffix' in kwargs:
-            raise ValueError("Cannot pass both 'suffix' and 'suffixes'")
-        self.suffixes = tuple(suffixes)
-        self._sources = [
-            LocalSource(base_dir, suffix=s, **kwargs) for s in suffixes
-        ]
-        self._base_uri = base_uri
+        super().__init__(**kwargs)
+        self._suffixes = suffixes
+        self._map = location_map.copy()
 
-    def __call__(self, relative_path: str) -> JSONCompatible:
+    def __call__(self, relative_path: str):
+        if (location := self._map.get(relative_path)) is None:
+            raise CatalogError(f'Requested unkown resource {relative_path!r}')
+
+        for suffix in self._suffixes:
+            if str(location).endswith(suffix):
+                data, url, sourcemap = self.suffix_map()[suffix](location)
+                self.uri_url_map[relative_path] = url
+                self.uri_sourcemap_map[relative_path] = sourcemap
+                return data
+
+        raise CatalogError(f'Cannot determine format of {relative_path!r}')
+
+
+class MultiDirectMapSource(Source, UrlAndSourceMapMixin):
+    """Allows registering multiple direct map sources under ``None``"""
+    def __init__(self, sources: Tuple[Source], **kwargs):
+        self._sources = sources
+        super().__init__(**kwargs)
+
+    def __call__(self, relative_path: str):
         for source in self._sources:
             try:
-                resource = source(relative_path)
-                self.set_url(relative_path, source)
-                return resource
-
-            except (OSError, CatalogError) as e:
+                return source(relative_path)
+            except CatalogError as e:
                 logger.debug(
-                    f"Checked {self.base_dir!r} for {relative_path!r}, "
-                    f"got exception:\n\t{e}"
+                    f'Got exception "{e}" from source {type(source).__name__}'
                 )
-                pass
 
-        raise CatalogError(
-            f"Could not find source for {relative_path!r} with any of "
-            f"suffixes {self.suffixes}",
-        )
+        raise CatalogError(f'Requested unkown resource {relative_path!r}')
 
-    def set_url(self, relative_path, source):
-        uri = str(self.base_uri) + relative_path
-        # LocalSource concatenates rather than using Path.with_suffix(),
-        # and also RemoteSource concatenates.
-        if source.suffix:
-            relative_path += source.suffix
-        url = str(
-            (pathlib.Path(source.base_dir) / relative_path).as_uri(),
-        )
-        # TODO: Normalize file:///?  Use rid.Iri?
-        self.uri_url_map[uri] = url
+    @property
+    def uri_url_map(self) -> Mapping[rid.Iri, rid.Iri]:
+        return super().uri_url_map
+
+    @uri_url_map.setter
+    def uri_url_map(self, mapping: Mapping[rid.Iri, rid.Iri]):
+        self._uri_url_map = mapping
+        for source in self._sources:
+            source.uri_url_map = mapping
+
+    @property
+    def uri_sourcemap_map(self) -> Mapping[rid.Iri, rid.Iri]:
+        return super().uri_url_map
+
+    @uri_sourcemap_map.setter
+    def uri_sourcemap_map(self, mapping: Optional[dict]) -> None:
+        self._uri_sourcemap_map = mapping
+        for source in self._sources:
+            source.uri_sourcemap_map = mapping
+
+    @property
+    def base_uri(self) -> Mapping[rid.Iri, rid.Iri]:
+        return super().uri_url_map
+
+    @base_uri.setter
+    def base_uri(self, bu: URIString) -> None:
+        self._base_uri = '' if bu is None else bu
+        for source in self._sources:
+            source.base_uri = self._base_uri
 
 
-class RemoteMultiSuffixSource(Source):
-    """
-    Resource loader that searches for HTTPS resources using a list of suffixes.
+class FileDirectMapSource(DirectMapSource, FileContentMixin):
+    pass
 
-    This source maps resources referenced under a base URI (registerd with the
-    :class:`OasCatalog`) to the same relative location under a base URL
-    from which they can be retrieved.
 
-    The :param:`base_url` is used as a prefix, and therefore **must**
-    end with a ``/``.
-
-    This source can search for URL matches using suffixes that are not present
-    in the referenced URI.  Non-empty suffixes **must** include the ``"."``
-    character, for example ``".json"``.
-
-    The empty string (``""``) can be used to load a non-suffixed resource,
-    in which case the media type in the ``Content-Type`` header is used
-    to determine how to parse the resource.
-
-    :param base_url: A base URL that ends with a ``/``
-    :param base_uri: The base URI (ending with a ``/``) that 
-        will be registered with the :class:`OasCatalog`.  This MUST
-        match the registered prefix so that mappings between resource
-        URLs and URIs can be determined.
-    :param suffixes: A list of suffixes, inlcuding the leading ``"."``,
-        to try in order to find a match; the list MUST have at least one
-        entry, but the empty string (``""``) is a valid entry for loading
-        a non-suffixed file; the default is ``["", ".json", ".yaml"]``
-    :param uri_url_map: A map from the URI used to request the resource
-        to the URL from which the resource was loaded, which is expected
-        to be shared among multiple source instances.
-    """
+class FileMultiSuffixSource(MultiSuffixSource, FileContentMixin):
     def __init__(
         self,
-        base_url: URI,
+        prefix: str,
         *,
-        base_uri: URI,
-        suffixes: Sequence[str] = ['', '.json', '.yaml'],
-        uri_url_map: Mapping[str, str],
+        suffixes: Sequence[Suffix] = ('', '.json', '.yaml'),
         **kwargs,
     ) -> None:
-        if 'suffix' in kwargs:
-            raise ValueError("Cannot pass both 'suffix' and 'suffixes'")
-        self._base_uri = base_uri
-        self._uri_url_map = uri_url_map
-        raise NotImplementedError
+        resource_dir = pathlib.Path(prefix).resolve()
+        if not resource_dir.is_dir():
+            raise ValueError(f'{prefix!r} must be an existing directory!')
 
-    def __call__(self, relative_path: str) -> JSONCompatible:
-        raise NotImplementedError
+        self.prefix = f'{resource_dir}/'
+        # TODO: omit prefix?
+        super().__init__(self.prefix, suffixes=suffixes)
+
+
+class HttpDirectMapSource(DirectMapSource, HttpContentMixin):
+    pass
+
+
+class HttpMultiSuffixSource(MultiSuffixSource, HttpContentMixin):
+    def __init__(
+        self,
+        prefix: str,
+        *,
+        suffixes: Sequence[Suffix] = ('', '.json', '.yaml'),
+        **kwargs,
+    ) -> None:
+        parsed_prefix = rid.Iri(prefix)
+        if not parsed_prefix.path.endswith('/'):
+            raise ValueError(f'{prefix!r} must contain a path ending with "/"')
+
+        self.prefix = str(parsed_prefix)
+
+        # TODO: omit prefix?
+        super().__init__(self.prefix, suffixes=suffixes)
 
 
 class OasCatalog(Catalog):
-    @property
-    def _uri_url_map(self):
-        try:
-            return self._u_u_map
-        except AttributeError:
-            self._u_u_map = []
-            return self._u_u_map
+    def __init__(self, *args, **kwargs):
+        self._uri_url_map = {}
+        self._uri_sourcemap_map = {}
+        super().__init__(*args, **kwargs)
+
+    def add_uri_source(
+        self,
+        base_uri: Optional[rid.Iri],
+        source,  # TODO: fix types
+    ) -> None:
+        if base_uri is None:
+            source.base_uri = '' if base_uri is None else str(base_uri)
+            jschon_base_uri = None
+        else:
+            source.base_uri = base_uri
+            # if base_uri.scheme == 'file' and base_uri.authority is None:
+            #     base_uri = base_uri.copy_with(authority='')
+            jschon_base_uri = URI(str(base_uri))
+        source.uri_url_map = self._uri_url_map
+        source.uri_sourcemap_map = self._uri_sourcemap_map
+
+        super().add_uri_source(jschon_base_uri, source)
 
     def get_resource(
         self,
-        uri,
+        uri: rid.IriReference,
         *,
-        resourceclass=None,
-        metaschema_uri=None,
-        cacheid='default',
+        resourceclass: Type[JSON] = None,
+        metaschema_uri: rid.IriReference = None,
+        cacheid: str = 'default',
     ):
         if resourceclass is None:
             resourceclass = OasJson
 
+        jschon_uri: URI = URI(str(uri))
         try:
             logger.debug(
                 f"Checking cache {cacheid} for resource '{uri}'",
             )
-            return self._schema_cache[cacheid][uri]
+            return self._schema_cache[cacheid][jschon_uri]
         except KeyError:
             logger.debug(
                 f"Resource '{uri}' not found in cache {cacheid}",
@@ -349,20 +486,25 @@ class OasCatalog(Catalog):
             pass
 
         resource = None
-        base_uri = uri.copy(fragment=False)
+        base_uri: rid.Iri = uri.to_absolute()
+        jschon_base_uri: URI = URI(str(base_uri))
 
         if uri.fragment is not None:
             try:
                 logger.debug(
                     f"Checking cache {cacheid} for base '{base_uri}'",
                 )
-                resource = self._schema_cache[cacheid][base_uri]
+                resource = self._schema_cache[cacheid][jschon_base_uri]
             except KeyError:
                 pass
 
         if resource is None:
             logger.debug(f"Attempting to load '{base_uri}'")
-            doc = self.load_json(base_uri)
+
+            # Note that the loading is done by the Source class, which can
+            # load non-JSON sources despite the name load_json()
+            doc = self.load_json(jschon_base_uri)
+
             if oasv := doc.get('openapi'):
                 if oasv.startswith('3.0'):
                     cacheid='3.0'
@@ -376,17 +518,30 @@ class OasCatalog(Catalog):
                     f"No OAS version found, caching under {cacheid!r}",
                 )
 
-            url = self._uri_url_map[base_uri],
+            url = self._uri_url_map[base_uri]
             logger.debug(f"Resolve URI '{base_uri}' via URL '{url}'")
 
-            # TODO: oasversion kwarg?
+            kwargs = {}
+            if (
+                issubclass(resourceclass, JSONSchema) and
+                metaschema_uri is not None
+            ):
+                # If we pass metaschema_uri to other classes,
+                # things get confusing between it showing up in itemkwargs
+                # vs being determined by OAS information
+                #
+                # TODO: Do we even ever load JSON Schemas with get_resource()?
+                kwargs['metaschema_uri'] = metaschema_uri
+
             resource = resourceclass(
                 doc,
                 catalog=self,
                 cacheid=cacheid,
-                uri=base_uri,
+                oasversion=cacheid, # TODO: too much of an assumption?
+                uri=jschon_base_uri,
                 url=url,
-                metaschema_uri=metaschema_uri,
+                sourcemap=self._uri_sourcemap_map[base_uri],
+                **kwargs,
             )
             try:
                 logger.debug(f"Re-checking cache for '{uri}'")
@@ -403,19 +558,14 @@ class OasCatalog(Catalog):
             except rid.JsonPtrError as e:
                 raise CatalogError(f"Schema not found for {uri}") from e
 
-        # TODO: Check OasJson-ness?
+        # TODO: Check OasJson-ness?  Or will this sometimes be OasJsonSchema?
         return resource
-
-    def add_uri_source(self, base_uri: URI, source: UrlMappingSourceMixin) -> None:
-        source.base_uri = base_uri
-        source.uri_url_map = self._uri_url_map
-        super().add_uri_source(base_uri, source)
 
     def get_schema(
             self,
-            uri: URI,
+            uri: rid.Iri,
             *,
-            metaschema_uri: URI = None,
+            metaschema_uri: rid.Iri = None,
             cacheid: Hashable = 'default',
     ) -> JSONSchema:
         # TODO: metaschema_uri needs to be set based on oasversion
@@ -425,15 +575,16 @@ class OasCatalog(Catalog):
         #       path.  We may need separate 3.0 and 3.1 caches.
         try:
             return super().get_schema(
-                uri,
-                metaschema_uri=metaschema_uri,
+                URI(str(uri)),
+                metaschema_uri=URI(str(metaschema_uri)),
                 cacheid=cacheid,
             )
         except CatalogError as e:
             if 'not a JSON Schema' not in str(e):
                 raise
 
-            base_uri = uri.copy(fragment=False)
+            # TODO: URI library confusion again... UGH
+            base_uri = rid.Iri(uri).to_absolute()
             resource = self.get_resource(base_uri, cacheid=cacheid)
             self.del_schema(uri)
 
@@ -459,113 +610,50 @@ class OasCatalog(Catalog):
             return parent.convert_to_schema(key)
 
 
-class OasJsonError(Exception):
-    """Base class for errors raised by :class:`OasJson`"""
-    def __str__(self):
-        return self.args[0]
-
-
-class OasJsonTypeError(OasJsonError, TypeError):
-    """Indicates an attempt to treat an OasJson as a jschon.JSONSchema"""
-    def __init__(self, uri, url):
-        super().__init__('Cannot evaluate OasJson as JSONSchema', uri, url)
-
-    @property
-    def uri(self):
-        """The URI of the mis-typed resource (possiby same as the URL)"""
-        return self.args[1]
-
-    @property
-    def url(self):
-        """The URL of the mis-typed resource"""
-        return self.args[2]
-
-
-class OasJsonUnresolvableRefError(OasJsonError, ValueError):
-    """Indicates that a reference target could not be found."""
-    def __init__(self, ref_uri):
-        super().__init__(
-            f"Could not resolve reference to {ref_uri}",
-            ref_uri,
-        )
-
-    @property
-    def ref_uri(self):
-        return self.args[1]
-
-
-class OasJsonRefSuffixError(OasJsonError, ValueError):
-    """Indicates misuse of filesystem suffixes in retrieving a resource."""
-    def __init__(
-        self,
-        source_schema_uri,
-        ref_uri,
-        ref_resource_uri,
-        target_resource_uri,
-        suffix,
-    ):
-        super().__init__(
-            f"Reference without suffix attempted despite target resource "
-            f"being registered under a URI with suffix",
-            source_schema_uri,
-            ref_uri,
-            ref_resource_uri,
-            target_resource_uri,
-            suffix,
-        )
-
-    @property
-    def source_schema_uri(self):
-        return self.args[1]
-
-    @property
-    def ref_uri(self):
-        return self.args[2]
-
-    @property
-    def ref_resource_uri(self):
-        return self.args[3]
-
-    @property
-    def target_resource_uri(self):
-        return self.args[4]
-
-    @property
-    def suffix(self):
-        return self.args[5]
-
-
 class OasJsonSchema(JSONSchema):
-    """:class:`jschon.jsonschema.JSONSchema` subclass embeddable in :class:`OasJson`"""
+    """
+    :class:`JSONSchema` subclass embeddable in :class:`OasJson`
+
+    :param parent: the parent :class:`OasJsonSchema`, if any
+    :param root: the root of the containing :class:`OasJson` instance
+    """
     def __init__(
             self,
             value: Union[bool, Mapping[str, JSONCompatible]],
             *,
             catalog: Union[str, Catalog] = 'catalog',
             cacheid: Hashable = 'default',
-            uri: URI = None,
-            metaschema_uri: URI = None,
+            uri: rid.Iri = None,
+            metaschema_uri: rid.Iri = None,
             parent: JSON = None,
             key: str = None,
-            root: str = None,
+            root: Union[OasJson, OasJsonSchema] = None,
     ):
         """
-        All parameters the same as for :class:`jschon.jsonschema.JSONSchema` unless
-        otherwise specified.
+        All parameters the same as for :class:`jschon.jsonschema.JSONSchema`
+        unless otherwise specified.
 
-        :param root: The :class:`jschon.json.JSON` instance at the root of the document;
-                     if None, then this instance is at the document root.  It is an error
-                     to specify a parent but not a root.
+        :param root: The :class:`jschon.json.JSON` instance at the root of
+            the document; if None, then this instance is at the document root.
+            It is an error to specify a parent but not a root.
         """
         super().__init__(
             value,
             catalog=catalog,
             cacheid=cacheid,
-            uri=uri,
-            metaschema_uri=metaschema_uri,
+            uri=URI(str(uri)),
+            metaschema_uri=URI(str(metaschema_uri)),
             parent=parent,
             key=key,
         )
+        parent_root = None if parent is None else parent.document_root
+
+        if root != parent.document_root:
+            raise ValueError(
+                'OasJsonSchemas in the same document must have the same '
+                f'document root! Given {root} for {uri}, with '
+                f'parent {parent.document_root.uri}',
+            )
         if root is None and parent is not None:
             raise ValueError('Cannot be a document root if a parent is present')
 
@@ -584,6 +672,9 @@ class OasJson(JSON):
     :param parent: The parent :class:`jschon.json.JSON` instance, if any
     :param key: The keyword under which this object appears in the parent
     :param itemclass: The class to use to instantiate child objects
+    :param catalog:
+    :param cacheid:
+    :param oasversion: *[in `itemkwargs`]* The
     """
 
     def __init__(
@@ -594,13 +685,15 @@ class OasJson(JSON):
         url=None,
         parent=None,
         key=None,
+        oasversion=None,
+        sourcemap=None,
         itemclass=None,
         catalog='oascomply',
         cacheid='default',
         **itemkwargs,
     ):
         logger.info(
-            f'OasJson({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
+            f'{id(self)} == OasJson({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
             f'parent={None if parent is None else id(parent)}, '
             f'key={key}, itemclass={itemclass}, catalog={catalog}, '
             f'cacheid={cacheid}, ...)',
@@ -612,75 +705,22 @@ class OasJson(JSON):
         self.oasversion: str
         """The major and minor (X.Y) part of the "openapi" version string"""
 
+        self.sourcemap: Optional[dict] = sourcemap
+        """Line and column number sourcemap, if enabled."""
+
         if itemclass is None:
-            itemclass = OasJson
+            itemclass = type(self)
 
-        # We may be in the middle of constructing the root instance,
-        # which results in not being able to cast it too boolean.
-        # Therefore, compare it to None instead.
-        # TODO: Figure out how to make this less fragile.
-        if (root := itemkwargs.get('root')) is not None:
-            self.document_root = root
-            self.oasversion = root.oasversion
-        else:
-            self.document_root = self
-            itemkwargs['root'] = self
-
-            if 'oasversion' not in itemkwargs:
-                if 'openapi' not in value:
-                    raise ValueError(
-                        f"{type(self)} requires the 'openapi' field "
-                        "or an 'oasversion' constructor parameter",
-                    )
-
-                # Chop off patch version number
-                itemkwargs['oasversion'] = value['openapi'][:3]
-            self.oasversion = itemkwargs['oasversion']
-
-        cacheid = self.oasversion
-
-        if 'oas_metaschema_uri' not in itemkwargs:
-            if itemkwargs['oasversion'] == '3.1':
-                itemkwargs['oas_metaschema_uri'] = URI(value.get(
-                    'jsonSchemaDialect',
-                    "https://spec.openapis.org/oas/3.1/dialect/base",
-                ))
-            elif itemkwargs['oasversion'] == '3.0':
-                itemkwargs['oas_metaschema_uri'] = URI(
-                    "https://spec.openapis.org/oas/v3.0/dialect/base",
-                )
-            else:
-                raise ValueError(
-                    f"Unsupported OAS version {value['openapi']}",
-                )
-        self._oas_metaschema_uri = itemkwargs['oas_metaschema_uri']
-        self._oasversion = itemkwargs['oasversion']
-        if uri is None:
-            # TODO: JsonPtr vs str
-            self.uri = parent.uri.copy_with(
-                fragment=rid.JsonPtr.parse_uri_fragment(
-                    str(parent.uri.fragment),
-                ) / key,
-            )
-        elif isinstance(uri, rid.UriWithJsonPtr):
-            self.uri = uri
-        else:
-            self.uri = rid.UriWithJsonPtr(str(uri))
-
-        if url is None:
-            # TODO: JsonPtr vs str
-            self.url = parent.url.copy_with(
-                fragment=rid.JsonPtr.parse_uri_fragment(
-                    str(parent.url.fragment),
-                ) / key,
-            )
-        elif isinstance(url, rid.UriWithJsonPtr):
-            self.url = url
-        else:
-            self.url = rid.UriWithJsonPtr(str(url))
+        self._handle_root(value, parent, oasversion, sourcemap, itemkwargs)
+        self._determine_uri_and_url(parent, uri, url, key)
 
         if not isinstance(catalog, Catalog):
             catalog = Catalog.get_catalog(catalog)
+
+        # Use the X.Y oasversion as the cacheid
+        # TODO: Is cacheid still needed in the __init__ arg list?  Maybe to
+        #       keep it out of itemkwargs as we bounce through jschon code?
+        cacheid = self.oasversion
 
         # Track position with JSON Pointer fragments, so ensure we have one
         # TODO: Sometimes we don't want an empty fragment on the root document.
@@ -702,8 +742,6 @@ class OasJson(JSON):
             self.url = self.url.copy_with(fragment='')
 
         self._schemakwargs = itemkwargs.copy()
-        del self._schemakwargs['oasversion']
-        del self._schemakwargs['oas_metaschema_uri']
         self._schemakwargs['catalog'] = catalog
         self._schemakwargs['cacheid'] = cacheid
         self._value = value
@@ -715,6 +753,85 @@ class OasJson(JSON):
             itemclass=itemclass,
             **itemkwargs,
         )
+
+    # TODO: why is itemkwargs not self._itemkwargs yet?
+    def _handle_root(
+        self,
+        value,
+        parent,
+        oasversion,
+        sourcemap,
+        itemkwargs,
+    ):
+        # NOTE: we may be in the process of construcing the parent
+        #       because of how jschon.JSON tree-building works, which
+        #       means bool(parent) could fail.  Instead, compare to None.
+        if parent is not None:
+            self.document_root = parent.document_root
+            self.oasversion = self.document_root.oasversion
+            self.sourcemap = self.document_root.sourcemap
+            self._oas_metaschema_uri = self.document_root._oas_metaschema_uri
+        else:
+            self.document_root = self
+
+            if oasversion is None:
+                if 'openapi' not in value:
+                    raise ValueError(
+                        f"{type(self)} requires the 'openapi' field "
+                        "or an 'oasversion' constructor parameter",
+                    )
+
+                # Chop off patch version number
+                oasversion = value['openapi'][:3]
+            self.oasversion = oasversion
+
+            self.sourcemap = sourcemap
+
+            self._determine_metaschema(value)
+
+    def _determine_metaschema(self, value):
+        if self.oasversion == '3.1':
+            self._oas_metaschema_uri = URI(value.get(
+                'jsonSchemaDialect',
+                "https://spec.openapis.org/oas/3.1/dialect/base",
+            ))
+        elif self.oasversion == '3.0':
+            self._oas_metaschema_uri = URI(
+                "https://spec.openapis.org/oas/v3.0/dialect/base",
+            )
+        else:
+            raise ValueError(
+                f"Unsupported OAS version {value['openapi']}",
+            )
+
+    def _determine_uri_and_url(self, parent, uri, url, key):
+        # TODO: There's more URI shenanigans later in __init__
+        #       related to confusion over no vs empty string fragments
+        if uri is None:
+            # TODO: JsonPtr vs str
+            self.uri = parent.uri.copy_with(
+                fragment=rid.JsonPtr.parse_uri_fragment(
+                    str(parent.uri.fragment),
+                ) / key,
+            )
+        elif isinstance(uri, rid.UriWithJsonPtr):
+            self.uri = uri
+        else:
+            self.uri = rid.UriWithJsonPtr(str(uri))
+
+        if url is None:
+            # TODO: JsonPtr vs str
+            self.url = parent.url.copy_with(
+                fragment=rid.JsonPtr.parse_uri_fragment(
+                    str(parent.url.fragment),
+                ) / key,
+            )
+        elif isinstance(url, rid.IriWithJsonPtr):
+            self.url = url
+        else:
+            logger.debug(type(url).__name__)
+            logger.debug(str(url))
+            self.url = rid.UriWithJsonPtr(str(url))
 
     def convert_to_schema(self, key):
         if not isinstance(self.data[key], OasJsonSchema):
