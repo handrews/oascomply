@@ -574,6 +574,7 @@ class OasCatalog(Catalog):
         #       oasversion, which may change depending on the access
         #       path.  We may need separate 3.0 and 3.1 caches.
         try:
+            logger.debug(f'META ({cacheid}): <{metaschema_uri}>')
             return super().get_schema(
                 URI(str(uri)),
                 metaschema_uri=URI(str(metaschema_uri)),
@@ -598,15 +599,18 @@ class OasCatalog(Catalog):
                     catalog=self,
                     cacheid=cacheid,
                 )
-            if not uri.fragment.startswith('/'):
+            # TODO: should not overload rid.IriReference.fragment type
+            fragment_str = str(uri.fragment)
+            if not fragment_str.startswith('/'):
                 raise ValueError(
                     'Non-JSON Pointer fragments not yet supported',
                 )
-            ptr = rid.JsonPtr.parse_uri_fragment(uri.fragment)
+            ptr = uri.fragment # = rid.JsonPtr.parse_uri_fragment(uri.fragment)
             parent_ptr = ptr[:-1]
             key = ptr[-1]
 
             parent = parent_ptr.evaluate(resource)
+            logger.debug(f'DEBUGGG r: {type(resource).__name__} <{resource.uri}> p: {type(parent).__name__} <{parent.path}>')
             return parent.convert_to_schema(key)
 
 
@@ -676,6 +680,27 @@ class OasJson(JSON):
     :param cacheid:
     :param oasversion: *[in `itemkwargs`]* The
     """
+
+    @classmethod
+    def get_oas_root(cls, document: JSON):
+        """
+        Find the root object for any :class:`jschon.json.JSON` document.
+
+        Since the :package:`jschon` classes don't understand schemas
+        embedded in other documents, and it is not possible to get all
+        parts of ``jschon`` to instantiate subclasses where needed,
+        this classmethod can be used with any :class:`jschon.json.JSON`
+        subclass.
+        """
+        if isinstance(document, cls):
+            return document.document_root
+        elif isinstance(document, JSONSchema):
+            schema_root = document.document_schemaroot
+            if schema_root.parent:
+                assert isinstance(schema_root.parent, OasJson), \
+                    f'Expected OasJson, got {type(document).__name__}'
+                return schema_root.parent.document_root
+            return schema_root
 
     def __init__(
         self,

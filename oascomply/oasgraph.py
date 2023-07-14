@@ -15,12 +15,14 @@ import toml
 import dom_toml
 import yaml
 
+import oascomply
 import oascomply.resourceid as rid
 from oascomply.ptrtemplates import (
     RelJsonPtrTemplate,
     RelJsonPtrTemplateError,
 )
 from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA
+from oascomply.oasjson import OasJson, OasJsonSchema
 
 __all__ = [
     'OasGraph',
@@ -566,22 +568,24 @@ class OasGraph:
         else:
             schema_data = [parent_obj]
 
+        # TODO: Access OAS dialect metaschema through OasJson document instance
         m_uri = jschon.URI(OAS30_DIALECT_METASCHEMA)
         for sd in schema_data:
-            if isinstance(sd, jschon.JSONSchema):
+            if isinstance(sd, OasJsonSchema):
                 schemas.append(sd)
+            elif isinstance(sd, OasJson):
+                schemas.append(
+                    oascomply.catalog.get_schema(sd.uri, metaschema_uri=m_uri),
+                )
+                # raise ValueError(
+                #     f'Got non-schema where schema expected: <{sd.uri}> '
+                #     f'of type {type(sd).__name__}',
+                # )
             else:
-                schemas.append(jschon.JSONSchema(
-                    sd.value,
-                    uri=jschon.URI(
-                        str(location.instance_resource_uri.copy_with(
-                            fragment=sd.path.uri_fragment(),
-                        )),
-                    ),
-                    metaschema_uri=m_uri,
-                    catalog='oascomply',
-                    cacheid=document.oasversion,
-                ))
+                raise ValueError(
+                    f"Unknown document type '{type(sd).__name__}' "
+                    f"for resource <{sd.uri}>",
+                )
 
         # TODO: Handle encoding objects
         if 'encodings' in annotation.value and len(list(
