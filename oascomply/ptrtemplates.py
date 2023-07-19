@@ -1,5 +1,7 @@
 from typing import Generator, Literal, Sequence, Tuple, Union
 from collections import namedtuple
+from functools import cached_property
+
 import re
 import jschon
 import jschon.exc
@@ -12,7 +14,7 @@ TEMPLATE_TOKEN = r'\{(' + TEMPLATE_VARIABLE + r')\}'
 TEMPLATE_ESCAPED = r'\~[0123]'
 NON_TEMPLATE_TOKEN = f'({TEMPLATE_UNESCAPED}|{TEMPLATE_ESCAPED})*'
 BASIC_POINTER_TEMPLATE = f'(/({TEMPLATE_TOKEN}|{NON_TEMPLATE_TOKEN}))*'
-JSON_POINTER_TEMPLATE = f'{BASIC_POINTER_TEMPLATE}({TEMPLATE_TOKEN}#)?'
+JSON_POINTER_TEMPLATE = f'{BASIC_POINTER_TEMPLATE}(/{TEMPLATE_TOKEN}#)?'
 
 PARENT_COUNT = '(0|([1-9][0-9]*))'
 INDEX_MANIPULATION = r'((\+|-)[1-9][0-9]*)?'
@@ -89,6 +91,40 @@ class JsonPtrTemplate:
             isinstance(other, type(self)) and
             self._template == other._template
         )
+
+    @cached_property
+    def _flattened_components(self):
+        """
+        Return a list consisting of JSONPointer components or None
+
+        None indicates a template variable; the boolean True marker for
+        taking the endex is omitted.
+        """
+        flat = []
+        for c in self._components:
+            if isinstance(c, jschon.JSONPointer):
+                flat.extend(c)
+            elif isinstance(c, str):
+                flat.append(None)
+        return flat
+
+    def __len__(self) -> int:
+        """Return `len(self)`."""
+        return len(self._flattened_components)
+
+    def matches(
+        self,
+        ptr: jschon.JSONPointer,
+    ):
+        if len(self) != len(ptr):
+            return False
+
+        for template_comp, ptr_comp in zip(
+            self._flattened_components, ptr
+        ):
+            if template_comp is not None and template_comp != ptr_comp:
+                return False
+        return True
 
     def evaluate(
         self,
