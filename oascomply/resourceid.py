@@ -2,20 +2,38 @@ from __future__ import annotations
 
 from functools import cached_property
 import logging
-from typing import overload, Iterable
+from typing import overload, Iterable, Union
 import urllib
 
 import rfc3987
 import jschon
 
 __all__ = [
-    'JsonPtr', 'RelJsonPtr',
-    'Iri', 'IriReference', 'Uri', 'UriReference',
-    'IriWithJsonPtr', 'IriReferenceWithJsonPtr',
-    'UriWithJsonPtr', 'UriReferenceWithJsonPtr',
+    'JsonPtr',
+    'RelJsonPtr',
+    'Iri',
+    'IriReference',
+    'Uri',
+    'UriReference',
+    'IriWithJsonPtr',
+    'IriReferenceWithJsonPtr',
+    'UriWithJsonPtr',
+    'UriReferenceWithJsonPtr',
+    'URIString',
+    'URIReferenceString',
+    'AnyURI',
+    'AnyURIReference',
+    'AnyURIManager',
 ]
 
 logger = logging.getLogger(__name__)
+
+
+URIString = str
+URIReferenceString = str
+AnyURI = Union[URIString, jschon.URI, 'Iri']
+AnyURIRef = Union[URIString, jschon.URI, 'IriReference']
+
 
 class ResourceIdentifier:
     """Abstract base class for RFC 3986/7 resource identifiers"""
@@ -28,7 +46,7 @@ class ResourceIdentifier:
         #       jschon.URI seems to like file:/ ?
         if (
             self.scheme == 'file' and
-            self.authority is ''
+            self.authority == ''
         ):
             self._parsed['authority'] = None
             self._parsed = rfc3987.parse(rfc3987.compose(**self._parsed))
