@@ -25,8 +25,7 @@ from oascomply.schemaparse import (
     Annotation, SchemaParser, JsonSchemaParseError,
 )
 from oascomply.oasjson import (
-    MultiDirectMapSource, FileDirectMapSource, FileMultiSuffixSource,
-    HttpDirectMapSource, HttpMultiSuffixSource,
+    DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
 from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA
 import oascomply.resourceid as rid
@@ -777,8 +776,6 @@ class ApiDescription:
                 )
             )
 
-        logger.info(f'PATH: {args.files[0].path} - {type(args.files[0].path).__name__}')
-        logger.info(f'URI:  {args.files[0].uri} - {type(args.files[0].uri).__name__}')
         file_map = {
             f_to_u.uri: f_to_u.path
             for f_to_u in args.files
@@ -787,7 +784,6 @@ class ApiDescription:
             u_to_u.uri: u_to_u.path
             for u_to_u in args.urls
         }
-        logger.info(f'FKEYS: {[str(k) for k in file_map.keys()]}')
         oascomply.catalog.add_uri_source(
             None,
             MultiDirectMapSource(

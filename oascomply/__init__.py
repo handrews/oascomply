@@ -8,14 +8,14 @@ import pathlib
 import jschon
 import jschon.catalog
 from jschon.catalog import _2020_12
-from oascomply.oasjson import OasCatalog
+from oascomply.oasjson import OASCatalog
 from oascomply.oas30dialect import initialize_oas30_dialect
 
 __all__ = [
     'catalog'
 ]
 
-catalog = OasCatalog('oascomply')
+catalog = OASCatalog('oascomply')
 """The default shared ``jschon``-derived resource loader and cache"""
 
 
