@@ -24,7 +24,7 @@ from oascomply.oasgraph import (
 from oascomply.schemaparse import (
     Annotation, SchemaParser, JsonSchemaParseError,
 )
-from oascomply.oasjson import (
+from oascomply.oassource import (
     DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
 from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA

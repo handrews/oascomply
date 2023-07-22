@@ -10,18 +10,11 @@ import json
 
 import jschon
 import jschon.utils
-from jschon.catalog import Catalog
+from jschon.catalog import Catalog, Source
 
-import yaml
-import rfc3339
-import rfc3987
-import json_source_map as jmap
-import yaml_source_map as ymap
-from yaml_source_map.errors import InvalidYamlError
-
-from oascomply import OASComplyError
+from oascomply import resourceid as rid
 from oascomply.oas30dialect import (
-    OAS30_DIALECT_METASCHEMA, OAS30_SUBSET_VOCAB, OAS39_EXTENSION_VOCAB,
+    OAS30_DIALECT_METASCHEMA, OAS30_SUBSET_VOCAB, OAS30_EXTENSION_VOCAB,
 )
 from oascomply.oasjson import OASJSON, OASJSONSchema
 from oascomply.oassource import OASSource
@@ -38,40 +31,9 @@ logger = logging.getLogger(__name__)
 
 class OASCatalog(Catalog):
 
-    _json_schema_cls = OASJSONSchema
-
-    SUPPORTED_OAS_VERSIONS = {
-        '3.0':  {
-            'schema': {
-                'uri': "https://spec.openapis.org/compliance/schemas/oas/3.0/2023-06",
-                'path': (
-                    Path(__file__).parent
-                    / '..'
-                    / 'schemas'
-                    / 'oas'
-                    / 'v3.0'
-                    / 'schema.json'
-                ).resolve(),
-            },
-            'dialect': {
-                # We don't need a path as loading this dialect is managed by
-                # the oascomply.oas30dialect module.
-                'uri': OAS30_DIALECT_METASCHEMA,
-            },
-        },
-    }
-
-    @classmethod
-    def get_oas_schema_uri(cls, oasversion):
-        return cls._metaschema_cls._uri_cls(
-            self.SUPPORTED_OAS_VERSIONS[oasversion]['schema']['uri'],
-        )
-
-    @classmethod
-    def get_metaschema_uri(cls, oasversion):
-        return cls._metaschema_cls._uri_cls(
-            self.SUPPORTED_OAS_VERSIONS[oasversion]['dialect']['uri'],
-        )
+    # TODO: Using JSONSchema allows requests that resolve to JSON, but
+    #       using OASJSONSchema somehow does not?????
+    _json_schema_cls = jschon.JSONSchema # OASJSONSchema
 
     def __init__(self, *args, **kwargs):
         self._uri_url_map = {}
@@ -81,12 +43,13 @@ class OASCatalog(Catalog):
     def add_uri_source(
         self,
         base_uri: Optional[jschon.URI],
-        source: OASSource,
+        source: Source,
     ) -> None:
         # This "base URI" is really treated as a prefix, which
         # is why a value of '' works at all.
-        uri_prefix = jschon.URI('' if base_uri is None else str(base_uri))
-        source.set_uri_prefix(uri_prefix)
+        uri_prefix = rid.Iri('' if base_uri is None else str(base_uri))
+        if isinstance(source, OASSource):
+            source.set_uri_prefix(uri_prefix)
         super().add_uri_source(uri_prefix, source)
 
     def _get_with_url_and_sourcemap(
@@ -125,7 +88,7 @@ class OASCatalog(Catalog):
         uri: jschon.URI,
         *,
         resourceclass: Type[jschon.JSON] = None,
-        oas_schema_uri: jschon.URI = None,
+        oas_schema_uri: rid.Iri = None,
     ):
         if resourceclass is None:
             resourceclass = OASJSON
@@ -163,22 +126,18 @@ class OASCatalog(Catalog):
 
 
 def initialize_oas_specification_schemas(catalog: OASCatalog):
-    for oasversion, oasinfo in self.SUPPORTED_OAS_VERSIONS.items():
+    for oasversion, oasinfo in OASJSON.SUPPORTED_OAS_VERSIONS.items():
         # As a metaschema, the OAS schema behaves like the corresponding
         # dialect metaschema as that is what it should use by default when
         # it encounters a Schema Object.  Objects betweenthe document root
         # and the Schema Objects are not JSONSchema subclasses and are
         # therefore treated like regular instance validation.
-        catalog._metaschema_cls(
+        catalog._json_schema_cls._metaschema_cls(
             catalog,
             jschon.utils.json_loads(
                 oasinfo['schema']['path'].read_text(encoding='utf-8'),
-            )
-            URI('https://json-schema.org/draft/2020-12/vocab/core'),
-            URI(OAS30_SUBSET_VOCAB),
-            URI(OAS30_EXTENSION_VOCAB),
-            uri=catalog.get_oas_schema_uri(oasversion),
+            ),
+            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls('https://json-schema.org/draft/2020-12/vocab/core')),
+            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls(OAS30_SUBSET_VOCAB)),
+            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls(OAS30_EXTENSION_VOCAB)),
         )
-    catalog.create_metaschema(
-        OASCatalog.get_oas_schema_uri('3.0'),
-    )

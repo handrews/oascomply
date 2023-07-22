@@ -20,7 +20,7 @@ import json_source_map as jmap
 import yaml_source_map as ymap
 from yaml_source_map.errors import InvalidYamlError
 
-from oascomply import resourceid as rid, OASComplyError
+from oascomply import resourceid as rid
 from oascomply.ptrtemplates import (
     JSON_POINTER_TEMPLATE, RELATIVE_JSON_POINTER_TEMPLATE,
     RelJsonPtrTemplate,
