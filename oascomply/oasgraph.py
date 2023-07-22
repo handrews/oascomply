@@ -22,7 +22,7 @@ from oascomply.ptrtemplates import (
     RelJsonPtrTemplateError,
 )
 from oascomply.oas30dialect import OAS30_DIALECT_METASCHEMA
-from oascomply.oasjson import OasJson, OasJsonSchema
+from oascomply.oasjson import OASJSON, OASJSONSchema
 
 __all__ = [
     'OasGraph',
@@ -570,12 +570,12 @@ class OasGraph:
         else:
             schema_data = [parent_obj]
 
-        # TODO: Access OAS dialect metaschema through OasJson document instance
+        # TODO: Access OAS dialect metaschema through OASJSON document instance
         m_uri = jschon.URI(OAS30_DIALECT_METASCHEMA)
         for sd in schema_data:
-            if isinstance(sd, OasJsonSchema):
+            if isinstance(sd, OASJSONSchema):
                 schemas.append(sd)
-            elif isinstance(sd, OasJson):
+            elif isinstance(sd, OASJSON):
                 schemas.append(
                     oascomply.catalog.get_schema(sd.uri, metaschema_uri=m_uri),
                 )
