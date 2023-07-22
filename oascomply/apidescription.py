@@ -411,7 +411,7 @@ class ApiDescription:
             # API descriptions within a single directory.
             # Otherwise it fails to notice many opportunities to
             # shorten IRI-references.
-            self._base_uri = document.uri.copy_with(
+            self._base_uri = document.uri.copy(
                 path=document.uri.path[:document.uri.path.rindex('/') + 1]
             )
         else:

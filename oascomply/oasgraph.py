@@ -361,8 +361,8 @@ class OasGraph:
                 child_obj = result.data
                 child_path = rid.JsonPtr(child_obj.path)
                 iu = location.instance_uri
-                child_uri = rdflib.URIRef(str(iu.copy_with(
-                    fragment=child_path,
+                child_uri = rdflib.URIRef(str(iu.copy(
+                    fragment=child_path.uri_fragment(),
                 )))
                 self._g.add((
                     parent_uri,
@@ -470,8 +470,10 @@ class OasGraph:
                 data,
             ):
                 ref_keyword = template_result.pointer.path[-1]
-                ref_source_uri = location.instance_uri.copy_with(
-                    fragment=rid.JsonPtr(template_result.data.path),
+                ref_source_uri = location.instance_uri.copy(
+                    fragment=rid.JsonPtr(
+                        template_result.data.path,
+                    ).uri_fragment(),
                 )
                 ref_uri_ref = rid.UriReference(template_result.data.value)
                 ref_target_uri = ref_uri_ref.resolve(location.instance_uri)
@@ -616,7 +618,7 @@ class OasGraph:
                     rdflib.Literal(str(example), datatype=RDF.JSON),
                 ))
                 for schema in schemas:
-                    ex_uri = location.instance_resource_uri.copy_with(
+                    ex_uri = location.instance_resource_uri.copy(
                         fragment=result.pointer.path.uri_fragment(),
                     )
                     logger.info(
@@ -691,7 +693,7 @@ class OasGraph:
             core_type = 'Parameter'
 
         if core_type == 'Reference':
-            path = rid.IriWithJsonPtr(node).fragment
+            path = rid.IriWithJsonPtr(node).fragment_ptr
             if len(path) == 3 and path[0] == 'components':
                 core_type = path[1].title()
                 if core_type == 'Requestbodies':

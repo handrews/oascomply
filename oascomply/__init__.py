@@ -8,12 +8,19 @@ import pathlib
 import jschon
 import jschon.catalog
 from jschon.catalog import _2020_12
-from oascomply.oasjson import OASCatalog
+from oascomply.oasjson import OASCatalog, initialize_oas_specification_schemas
 from oascomply.oas30dialect import initialize_oas30_dialect
 
 __all__ = [
+    'OASComplyError'
     'catalog'
 ]
+
+
+class OASComplyError(ValueError):
+    """Base class for exceptions within the ``oascomply`` package."""
+    pass
+
 
 catalog = OASCatalog('oascomply')
 """The default shared ``jschon``-derived resource loader and cache"""
@@ -56,3 +63,4 @@ catalog.add_uri_source(
 
 _2020_12.initialize(catalog)
 initialize_oas30_dialect(catalog)
+initialize_oas_specification_schemas(catalog)
