@@ -415,8 +415,8 @@ test = ["tox"]
 [package.source]
 type = "git"
 url = "https://github.com/handrews/jschon.git"
-reference = "oascomply-argparse"
-resolved_reference = "9141b83890a4817fca795cb9f339eb88e60bde88"
+reference = "oascomply-cat-init"
+resolved_reference = "315df6ad1b1b3363198d3a555d91d53a29c39678"
 
 [[package]]
 name = "json-merge-patch"
@@ -1262,4 +1262,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "8aa2ea4ad60f0f119d2704f156be482d35df4f19ced8c79e03320f2e742eddc9"
+content-hash = "9d6f5c64f96471cbc711d281f0ca49c5cfa1269989aaeee54a2bce44c559834e"
