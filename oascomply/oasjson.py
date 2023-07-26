@@ -3,12 +3,15 @@ from __future__ import annotations
 import re
 import logging
 import pathlib
-from typing import Hashable, Mapping, Optional, Sequence, Tuple, Type, TYPE_CHECKING, Union
+from typing import (
+    Hashable, Mapping, Optional, Sequence, Tuple, Type, TYPE_CHECKING, Union,
+)
 import json
 
 import jschon
 import jschon.utils
 from jschon.jsonschema import JSONSchemaContainer
+from jschon.vocabulary import Metaschema
 
 from oascomply import resourceid as rid
 from oascomply.exceptions import OASComplyError
@@ -49,6 +52,29 @@ class OASSchemaValidationError(OASComplyError):
 class OASJSONMixin:
     """Interface for JSON classes implementing OAS documents"""
 
+    SUPPORTED_OAS_VERSIONS = {
+        '3.0':  {
+            'schema': {
+                'uri': "https://spec.openapis.org/compliance/schemas/oas/3.0/2023-06",
+                'path': (
+                    pathlib.Path(__file__).parent
+                    / '..'
+                    / 'schemas'
+                    / 'oas'
+                    / 'v3.0'
+                    / 'schema.json'
+                ).resolve(),
+            },
+            'dialect': {
+                # We don't need a path as loading this dialect is managed by
+                # the oascomply.oas30dialect module.
+                'uri': OAS30_DIALECT_METASCHEMA,
+            },
+        },
+    }
+
+    _oasversion: Optional[str] = None
+
     @property
     def oasversion(self) -> str:
         """The major and minor (X.Y) part of the "openapi" version string"""
@@ -63,20 +89,20 @@ class OASJSONMixin:
                 # Chop off patch version number
                 # Assign through property for version check.
                 self.oasversion = '.'.join(
-                    self.data['openapi'].split('.')[:2],
+                    self['openapi'].data.split('.')[:2],
                 )
         return self._oasversion
 
     @oasversion.setter
     def oasversion(self, oasversion: str) -> None:
-        if oasversion not in OASCatalog.SUPPORTED_OAS_VERSIONS:
+        if oasversion not in self.SUPPORTED_OAS_VERSIONS:
             raise OASUnsupportedVersionError(
                 oasversion, uri=self.uri, url=self.url,
             )
 
         if (
             'openapi' in self.data and
-            not (actual := self.data['openapi']).startswith(oasversion)
+            not (actual := self['openapi'].data).startswith(oasversion)
         ):
             raise OASVersionConflictError(
                 document_version=actual,
@@ -150,44 +176,22 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         r'(/paths/[^/]*/responses/((default)|([1-5][0-9X][0-9X]))/content/[^/]*/schema)',
     )
 
-    SUPPORTED_OAS_VERSIONS = {
-        '3.0':  {
-            'schema': {
-                'uri': "https://spec.openapis.org/compliance/schemas/oas/3.0/2023-06",
-                'path': (
-                    pathlib.Path(__file__).parent
-                    / '..'
-                    / 'schemas'
-                    / 'oas'
-                    / 'v3.0'
-                    / 'schema.json'
-                ).resolve(),
-            },
-            'dialect': {
-                # We don't need a path as loading this dialect is managed by
-                # the oascomply.oas30dialect module.
-                'uri': OAS30_DIALECT_METASCHEMA,
-            },
-        },
-    }
-
     @classmethod
     def get_oas_schema_uri(cls, oasversion):
-        return cls._metaschema_cls._uri_cls(
-            self.SUPPORTED_OAS_VERSIONS[oasversion]['schema']['uri'],
+        return jschon.URI(
+            cls.SUPPORTED_OAS_VERSIONS[oasversion]['schema']['uri'],
         )
 
     @classmethod
     def get_metaschema_uri(cls, oasversion):
-        return cls._metaschema_cls._uri_cls(
-            self.SUPPORTED_OAS_VERSIONS[oasversion]['dialect']['uri'],
+        return jschon.URI(
+            cls.SUPPORTED_OAS_VERSIONS[oasversion]['dialect']['uri'],
         )
 
-    _uri_cls: ClassVar[Type[rid.IriReference]] = rid.IriReference
     _catalog_cls: ClassVar[Type[OASCatalog]]
 
     @classmethod
-    def _set_catalog_cls(cls, catalog_cls):
+    def _set_catalog_cls(cls):
         from oascomply.oascatalog import OASCatalog
         cls._catalog_cls = OASCatalog
 
@@ -205,21 +209,18 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         catalog='oascomply',
         **itemkwargs,
     ):
-        logger.info(
-            f'{id(self)} == OASJSON({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
-            f'parent={None if parent is None else id(parent)}, '
-            f'key={key}, itemclass={itemclass}, catalog={catalog}, '
-            f'cacheid={cacheid}, ...)',
-        )
-
-        if oasversion is not None:
-            self.oasversion = oasversion
-        if parent is None:
-            self.sourcemap = sourcemap
-            self.url = url
+        # logger.info(
+        #     f'{id(self)} == OASJSON({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
+        #     f'parent={None if parent is None else id(parent)}, '
+        #     f'key={key}, itemclass={itemclass}, catalog={catalog}, '
+        #     f'cacheid={cacheid}, ...)',
+        # )
 
         if itemclass is None:
             itemclass = type(self)
+
+        if not hasattr(type(self), '_catalog_cls'):
+            type(self)._set_catalog_cls()
 
         if not isinstance(catalog, self._catalog_cls):
             catalog = self._catalog_cls.get_catalog(catalog)
@@ -227,7 +228,7 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         # Use the X.Y oasversion as the cacheid
         # TODO: Is cacheid still needed in the __init__ arg list?  Maybe to
         #       keep it out of itemkwargs as we bounce through jschon code?
-        cacheid = self.oasversion
+        cacheid = oasversion or '3.0' # self.oasversion
 
         super().__init__(
             value,
@@ -235,10 +236,17 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
             key=key,
             uri=uri,
             catalog=catalog,
-            cacheid=self.oasversion,
+            # cacheid=cacheid,
             itemclass=itemclass,
             **itemkwargs,
         )
+
+        if oasversion is not None:
+            self.oasversion = oasversion
+
+        if self.parent is None:
+            self.sourcemap = sourcemap
+            self.url = url
 
     def _get_itemclass(self, ptr):
         if self._SCHEMA_PATH_REGEX.fullmatch(str(ptr)):
@@ -246,16 +254,19 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         return type(self)
 
     def instantiate_mapping(self, value):
-        itemclass = self._get_itemclass(
-            self.path / k,
-        )
-        return {
-            k: itemclass(
+        mapping = {}
+        for k, v in value.items():
+            itemclass = self._get_itemclass(
+                self.path / k,
+            )
+            mapping[k] = itemclass(
+                v,
                 parent=self,
                 key=k,
+                catalog=self.catalog,
                 **self.itemkwargs,
-            ) for k, v in value.items()
-        }
+            )
+        return mapping
 
     def resolve_references(self) -> None:
         if self.references_resolved == True:
@@ -348,11 +359,6 @@ class OASJSONSchema(JSONSchemaContainer, OASJSONMixin):
         from oascomply.oascatalog import OASCatalog
         cls._catalog_cls = OASCatalog
 
-    # TODO: __init__ really needs to do this?
-    def __init__(self, *args, **kwargs):
-        self._set_catalog_cls()
-        super().__init__(*args, **kwargs)
-
     @property
     def oasversion(self) -> str:
         return self.document_root.oasversion
@@ -362,9 +368,9 @@ class OASJSONSchema(JSONSchemaContainer, OASJSONMixin):
         if (m := super().metaschema_uri) is not None:
             return m
         elif self.oasversion == '3.0':
-            return self._uri_cls(OAS30_DIALECT_METASCHEMA)
+            return jschon.URI(OAS30_DIALECT_METASCHEMA)
         elif self.oasversion == '3.1':
-            return self._uri_cls(self.document_root.data.get(
+            return jschon.URI(self.document_root.data.get(
                 'jsonSchemaDialect',
                 "https://spec.openapis.org/oas/3.1/dialect/base",
             ))
