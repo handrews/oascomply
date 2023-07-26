@@ -2,6 +2,7 @@ from typing import Generator, Sequence, Tuple, Union
 from collections import namedtuple
 import re
 import jschon
+import jschon.exc
 
 from oascomply.resourceid import JsonPtr, RelJsonPtr
 
@@ -112,7 +113,7 @@ class JsonPtrTemplate:
             new_resolved = _resolved / next_c
             try:
                 new_instance = next_c.evaluate(instance)
-            except jschon.JSONPointerError as e:
+            except jschon.exc.JSONPointerError as e:
                 if not require_match:
                     return
                 raise JsonPtrTemplateEvaluationError(
@@ -210,8 +211,7 @@ class RelJsonPtrTemplate:
                 self._relptr = RelJsonPtr(template)
                 self._jptemplate = None
         except (
-            jschon.JSONPointerError,
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             InvalidJsonPtrTemplateError,
         ) as e:
             raise InvalidRelJsonPtrTemplateError(
@@ -231,7 +231,7 @@ class RelJsonPtrTemplate:
     def evaluate(self, instance, *, require_match=False):
         try:
             base = self._relptr.evaluate(instance)
-        except jschon.RelativeJSONPointerError as e:
+        except jschon.exc.JSONPointerError as e:
             raise RelJsonPtrTemplateEvaluationError(
                 f"Could not evaluate origin adjustment of {self._template}",
             ) from e
