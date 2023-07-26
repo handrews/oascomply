@@ -45,47 +45,48 @@ class OASCatalog(Catalog):
         base_uri: Optional[jschon.URI],
         source: Source,
     ) -> None:
-        # This "base URI" is really treated as a prefix, which
-        # is why a value of '' works at all.
-        uri_prefix = rid.Iri('' if base_uri is None else str(base_uri))
+        super().add_uri_source(base_uri, source)
         if isinstance(source, OASSource):
+            # This "base URI" is really treated as a prefix, which
+            # is why a value of '' works at all.
+            uri_prefix = rid.IriReference('' if base_uri is None else str(base_uri))
             source.set_uri_prefix(uri_prefix)
-        super().add_uri_source(uri_prefix, source)
+            source.set_uri_url_map(self._uri_url_map)
+            source.set_uri_sourcemap_map(self._uri_sourcemap_map)
 
     def _get_with_url_and_sourcemap(
         self,
         uri,
         *,
-        cacheid,
+        oasversion,
         metaschema_uri,
         cls,
     ):
         base_uri = uri.copy(fragment=None)
         document_cached = isinstance(
-            self._schema_cache[oasversion].get(base_uri),
-            resourceclass,
+            self._schema_cache.get(oasversion, {}).get(base_uri),
+            cls,
         )
 
         # TODO: get_schema() is a misnomer but exact method naming
         #       scheme TBD in the next jschon version.
         oas = self.get_schema(
             uri,
-            cacheid=cacheid,
+            cacheid=oasversion,
             metaschema_uri=metaschema_uri,
-            cls=resourceclass,
+            cls=cls,
         )
 
         if not document_cached:
-            url = OASSource.get_url(base_uri)
-            oas.document_root.url = url
-            oas.document_root.source_map = OASSource.get_sourcemap(base_uri)
+            oas.document_root.url = self._uri_url_map[str(base_uri)]
+            oas.document_root.source_map = self._uri_sourcemap_map[str(base_uri)]
 
         return oas
 
     def get_oas(
         self,
-        oasversion: str,
         uri: jschon.URI,
+        oasversion: str,
         *,
         resourceclass: Type[jschon.JSON] = None,
         oas_schema_uri: rid.Iri = None,
@@ -94,13 +95,13 @@ class OASCatalog(Catalog):
             resourceclass = OASJSON
 
         if oas_schema_uri is None:
-            oas_schema_uri = self.get_oas_schema_uri(oasversion)
+            oas_schema_uri = OASJSON.get_oas_schema_uri(oasversion)
 
         return self._get_with_url_and_sourcemap(
             uri,
-            cacheid=oasversion,
+            oasversion=oasversion,
             metaschema_uri=oas_schema_uri,
-            resourceclass=cls,
+            cls=resourceclass,
         )
 
     def get_oas_schema(
@@ -115,7 +116,7 @@ class OASCatalog(Catalog):
             resourceclass = OASJSONSchema
 
         if metaschema_uri is None:
-            metaschema_uri = self.get_metaschema_uri(oasversion)
+            metaschema_uri = OASJSON.get_metaschema_uri(oasversion)
 
         return self._get_with_url_and_sourcemap(
             uri,
@@ -137,7 +138,7 @@ def initialize_oas_specification_schemas(catalog: OASCatalog):
             jschon.utils.json_loads(
                 oasinfo['schema']['path'].read_text(encoding='utf-8'),
             ),
-            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls('https://json-schema.org/draft/2020-12/vocab/core')),
-            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls(OAS30_SUBSET_VOCAB)),
-            catalog.get_vocabulary(catalog._json_schema_cls._uri_cls(OAS30_EXTENSION_VOCAB)),
+            catalog.get_vocabulary(jschon.URI('https://json-schema.org/draft/2020-12/vocab/core')),
+            catalog.get_vocabulary(jschon.URI(OAS30_SUBSET_VOCAB)),
+            catalog.get_vocabulary(jschon.URI(OAS30_EXTENSION_VOCAB)),
         )

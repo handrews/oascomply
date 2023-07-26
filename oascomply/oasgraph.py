@@ -9,6 +9,7 @@ from typing import Any, Optional
 import logging
 
 import jschon
+import jschon.exc
 import rdflib
 from rdflib.namespace import RDF, RDFS, XSD
 import toml
@@ -382,7 +383,7 @@ class OasGraph:
                     )
             return OasGraphResult(errors=[], refTargets=[])
         except (
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             RelJsonPtrTemplateError,
         ) as e:
             # TODO: actual error handling
@@ -414,7 +415,7 @@ class OasGraph:
                 #       be subjects in triples.
             return OasGraphResult(errors=[], refTargets=[])
         except (
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             RelJsonPtrTemplateError,
         ) as e:
             # TODO: actual error handling
@@ -454,7 +455,7 @@ class OasGraph:
                 ))
             return OasGraphResult(errors=[], refTargets=[])
         except (
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             RelJsonPtrTemplateError,
         ) as e:
             # TODO: actual error handling
@@ -546,7 +547,7 @@ class OasGraph:
 
         except (
             ValueError,
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             RelJsonPtrTemplateError,
         ) as e:
             # TODO: Actual error handling
@@ -635,7 +636,7 @@ class OasGraph:
 
         except (
             jschon.CatalogError,
-            jschon.RelativeJSONPointerError,
+            jschon.exc.JSONPointerError,
             RelJsonPtrTemplateError,
         ) as e:
             # TODO: actual error handling
