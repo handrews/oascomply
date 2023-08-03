@@ -209,13 +209,6 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         catalog='oascomply',
         **itemkwargs,
     ):
-        # logger.info(
-        #     f'{id(self)} == OASJSON({{...}}, uri={str(uri)!r}, url={str(url)!r}, '
-        #     f'parent={None if parent is None else id(parent)}, '
-        #     f'key={key}, itemclass={itemclass}, catalog={catalog}, '
-        #     f'cacheid={cacheid}, ...)',
-        # )
-
         if itemclass is None:
             itemclass = type(self)
 
@@ -383,3 +376,8 @@ class OASJSONSchema(JSONSchemaContainer, OASJSONMixin):
     def metaschema_uri(self, metaschema_uri: Optional[URI]) -> None:
         # Used by the parent class, duplicated because @property
         self._metaschema_uri = metaschema_uri
+
+
+    def is_embedded_root(self) -> bool:
+        # TODO: Might need to look to first non-JSON (base class) ancestor
+        return super().is_embedded() or isinstance(self.parent, OASJSON)
