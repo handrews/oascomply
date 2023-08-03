@@ -415,8 +415,8 @@ test = ["tox"]
 [package.source]
 type = "git"
 url = "https://github.com/handrews/jschon.git"
-reference = "oascomply-cat-init"
-resolved_reference = "315df6ad1b1b3363198d3a555d91d53a29c39678"
+reference = "oas3-m2"
+resolved_reference = "ef064fb0aa222e708440809ae24563f6959f5e91"
 
 [[package]]
 name = "json-merge-patch"
