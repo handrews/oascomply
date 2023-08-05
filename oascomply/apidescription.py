@@ -816,6 +816,21 @@ class ApiDescription:
                 "by default, no suffixes are appended to URLs",
         )
         parser.add_argument(
+            '-a',
+            '--autoload-known',
+            action='store_true',
+            help="NOT YET IMPLEMENTED! "
+                 "Automatically load and parse all documents from -f or -u",
+        )
+        parser.add_argument(
+            '-A',
+            '--autoload-all',
+            action='store_true',
+            help="NOT YET IMPLEMENTED! "
+                 "Automatically load and parse all JSON and YAML documents "
+                 "found under trees specified by -d or -p",
+        )
+        parser.add_argument(
             '-n',
             '--number-lines',
             action='store_true',
