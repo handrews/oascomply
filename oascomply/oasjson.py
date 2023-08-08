@@ -108,7 +108,7 @@ def _yaml_loadf(full_path, create_source_map=False):
             logger.warn(
                 f"Unable to calculate source map for {path}",
             )
-    return data, path.as_uri(), sourcemap
+    return data, url, sourcemap
 
 
 class MultiSuffixSource(Source):
