@@ -89,8 +89,7 @@ class OASJSONMixin:
                     / 'schema.json'
                 ).resolve(),
             },
-            'dialect': {
-
+        },
     }
 
     _oasversion: Optional[str] = None
