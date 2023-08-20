@@ -68,15 +68,17 @@ PATCHES = {
             ],
             'outfile': PATCHED_OAS31_SCHEMA_PATH,
         },
-        OAS_V31_SCHEMA_OBJ_DEFAULT_DIALECT: {
-            'patches': [],
-            'outfile': PATCHED_OAS31_DIALECT_PATH,
-        },
+        # META (the vocabulary metaschema) must be patched before DIALECT
         OAS_V31_SCHEMA_OBJ_EXTENSION_META: {
+            'patches': [],
             'patches': [
                 OAS_PATCH_DIR / 'v3.1' / 'extension-meta.yaml',
             ],
             'outfile': PATCHED_OAS31_META_PATH,
+        },
+        OAS_V31_SCHEMA_OBJ_DEFAULT_DIALECT: {
+            'patches': [],
+            'outfile': PATCHED_OAS31_DIALECT_PATH,
         },
     },
 }
@@ -219,17 +221,17 @@ def apply_patches(target, patch_info):
             )
         if isinstance(patch_data, list):
             print(f'Applying JSON Patch (RFC 6902) "{patch_file}" ...')
-            patched = JSONPatch(*patch_data).evaluate(schema)
+            schema = JSONPatch(*patch_data).evaluate(schema)
         else:
             print(f'Applying JSON Merge Patch (RFC 7396) "{patch_file}" ...')
-            json_merge_patch.merge(patched, patch_data)
+            json_merge_patch.merge(schema, patch_data)
 
     # move $defs to the end after patching in more root-level keywords.
     # Don't bother constructing an OrderedDict for this as supported
     # versions of python preserve insert order.
-    defs = patched['$defs']
-    del patched['$defs']
-    patched['$defs'] = defs
+    if (defs := schema.get('$defs')) is not None:
+        del schema['$defs']
+        schema['$defs'] = defs
 
     print('Vaidating patched schema against its metaschema ...')
     with COMPLIANCE_VOCAB_METASCHEMA.open(encoding='utf-8') as vm_fp, \
@@ -237,7 +239,7 @@ def apply_patches(target, patch_info):
         vmeta = json.load(vm_fp)
         dmeta = json.load(dm_fp)
 
-    if schema_errors := validate_schema(patched, vmeta, dmeta):
+    if schema_errors := validate_schema(schema, vmeta, dmeta):
         sys.stderr.write('Metaschema validation failed!\n\n')
         json.dump(schema_errors, sys.stderr, indent=2, ensure_ascii=False)
         sys.stderr.write('\n')
@@ -248,7 +250,7 @@ def apply_patches(target, patch_info):
     with open(patched_file, 'w', encoding='utf-8') as patched_fp:
         # For some reason there is no option for json.dump() to
         # include a trailing newline.
-        json.dump(patched, patched_fp, indent=2, allow_nan=False)
+        json.dump(schema, patched_fp, indent=2, allow_nan=False)
         patched_fp.write('\n')
 
 
