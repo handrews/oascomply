@@ -11,6 +11,7 @@ import json
 import jschon
 import jschon.utils
 from jschon.catalog import Catalog, Source
+from jschon.vocabulary import Metaschema
 
 from oascomply import resourceid as rid
 from oascomply.oas30dialect import (
@@ -30,11 +31,6 @@ logger = logging.getLogger(__name__)
 
 
 class OASCatalog(Catalog):
-
-    # TODO: Using JSONSchema allows requests that resolve to JSON, but
-    #       using OASJSONSchema somehow does not?????
-    _json_schema_cls = jschon.JSONSchema # OASJSONSchema
-
     def __init__(self, *args, **kwargs):
         self._uri_url_map = {}
         self._uri_sourcemap_map = {}
@@ -59,7 +55,7 @@ class OASCatalog(Catalog):
         uri,
         *,
         oasversion,
-        metaschema_uri,
+        metadocument_uri,
         cls,
     ):
         base_uri = uri.copy(fragment=None)
@@ -68,12 +64,10 @@ class OASCatalog(Catalog):
             cls,
         )
 
-        # TODO: get_schema() is a misnomer but exact method naming
-        #       scheme TBD in the next jschon version.
-        oas = self.get_schema(
+        oas = self.get_resource(
             uri,
             cacheid=oasversion,
-            metaschema_uri=metaschema_uri,
+            metadocument_uri=metadocument_uri,
             cls=cls,
         )
 
@@ -95,12 +89,12 @@ class OASCatalog(Catalog):
             resourceclass = OASJSON
 
         if oas_schema_uri is None:
-            oas_schema_uri = OASJSON.get_oas_schema_uri(oasversion)
+            oas_schema_uri = OASJSON.get_schema_object_metaschema_uri(oasversion)
 
         return self._get_with_url_and_sourcemap(
             uri,
             oasversion=oasversion,
-            metaschema_uri=oas_schema_uri,
+            metadocument_uri=oas_schema_uri,
             cls=resourceclass,
         )
 
@@ -109,19 +103,19 @@ class OASCatalog(Catalog):
             oasversion: str,
             uri: jschon.URI,
             *,
-            metaschema_uri: jschon.URI = None,
+            metadocument_uri: jschon.URI = None,
             resourceclass: Type[jschon.JSON] = None,
     ) -> jschon.JSONSchema:
         if resourceclass is None:
             resourceclass = OASJSONSchema
 
-        if metaschema_uri is None:
-            metaschema_uri = OASJSON.get_metaschema_uri(oasversion)
+        if metadocument_uri is None:
+            metadocument_uri = OASJSON.get_oas_metadocument_uri(oasversion)
 
         return self._get_with_url_and_sourcemap(
             uri,
             cacheid=oasversion,
-            metaschema_uri=oas_schema_uri,
+            metadocument_uri=oas_schema_uri,
             resourceclass=cls,
         )
 
@@ -130,10 +124,10 @@ def initialize_oas_specification_schemas(catalog: OASCatalog):
     for oasversion, oasinfo in OASJSON.SUPPORTED_OAS_VERSIONS.items():
         # As a metaschema, the OAS schema behaves like the corresponding
         # dialect metaschema as that is what it should use by default when
-        # it encounters a Schema Object.  Objects betweenthe document root
+        # it encounters a Schema Object.  Objects between the document root
         # and the Schema Objects are not JSONSchema subclasses and are
         # therefore treated like regular instance validation.
-        catalog._json_schema_cls._metaschema_cls(
+        Metaschema(
             catalog,
             jschon.utils.json_loads(
                 oasinfo['schema']['path'].read_text(encoding='utf-8'),

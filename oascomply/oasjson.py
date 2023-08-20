@@ -4,13 +4,13 @@ import re
 import logging
 import pathlib
 from typing import (
-    Hashable, Mapping, Optional, Sequence, Tuple, Type, TYPE_CHECKING, Union,
+    Hashable, Literal, Mapping, Optional, Sequence, Tuple, Type, TYPE_CHECKING, Union,
 )
 import json
 
 import jschon
 import jschon.utils
-from jschon.jsonschema import JSONSchemaContainer
+from jschon.jsonformat import JSONFormat
 from jschon.vocabulary import Metaschema
 
 from oascomply import resourceid as rid
@@ -89,32 +89,33 @@ class OASJSONMixin:
                 # Chop off patch version number
                 # Assign through property for version check.
                 self.oasversion = '.'.join(
-                    self['openapi'].data.split('.')[:2],
+                    self['openapi'].split('.')[:2],
                 )
         return self._oasversion
 
     @oasversion.setter
     def oasversion(self, oasversion: str) -> None:
+        self._set_oasversion(oasversion)
+
+    def _set_oasversion(self, oasversion: str) -> None:
         if oasversion not in self.SUPPORTED_OAS_VERSIONS:
             raise OASUnsupportedVersionError(
                 oasversion, uri=self.uri, url=self.url,
             )
 
-        if (
-            'openapi' in self.data and
-            not (actual := self['openapi'].data).startswith(oasversion)
-        ):
-            raise OASVersionConflictError(
-                document_version=actual,
-                attempted_version=oasversion,
-                uri=self.uri,
-                url=self.url,
-            )
+        if self is self.document_root:
+            if (
+                'openapi' in self.data and
+                not (actual := self['openapi']).startswith(oasversion)
+            ):
+                raise OASVersionConflictError(
+                    document_version=actual,
+                    attempted_version=oasversion,
+                    uri=self.uri,
+                    url=self.url,
+                )
 
-        if (
-            self is not self.document_root and
-            oasversion != (actual := self.document_root.oasversion)
-        ):
+        elif oasversion != (actual := self.document_root.oasversion):
             raise OASVersionConflictError(
                 document_version=actual,
                 attempted_version=oasversion,
@@ -152,7 +153,7 @@ class OASJSONMixin:
             raise ValueError('Cannot set sourcemap on non-root')
 
 
-class OASJSON(JSONSchemaContainer, OASJSONMixin):
+class OASJSON(JSONFormat, OASJSONMixin):
     """
     Representation of an OAS-complaint API document.
 
@@ -176,24 +177,21 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         r'(/paths/[^/]*/responses/((default)|([1-5][0-9X][0-9X]))/content/[^/]*/schema)',
     )
 
+    _default_metadocument_cls: Optional[
+        ClassVar[Type[EvaluableJSON]]
+    ] = jschon.JSONSchema
+
     @classmethod
-    def get_oas_schema_uri(cls, oasversion):
+    def get_oas_metadocument_uri(cls, oasversion):
         return jschon.URI(
             cls.SUPPORTED_OAS_VERSIONS[oasversion]['schema']['uri'],
         )
 
     @classmethod
-    def get_metaschema_uri(cls, oasversion):
+    def get_schema_object_metaschema_uri(cls, oasversion):
         return jschon.URI(
             cls.SUPPORTED_OAS_VERSIONS[oasversion]['dialect']['uri'],
         )
-
-    _catalog_cls: ClassVar[Type[OASCatalog]]
-
-    @classmethod
-    def _set_catalog_cls(cls):
-        from oascomply.oascatalog import OASCatalog
-        cls._catalog_cls = OASCatalog
 
     def __init__(
         self,
@@ -203,20 +201,20 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
         url=None,
         parent=None,
         key=None,
-        oasversion=None,
+        oasversion: Optional[Literal['3.0', '3.1']] = None,
         sourcemap=None,
-        itemclass=None,
-        catalog='oascomply',
+        itemclass: Type[jschon.JSON] = None,
+        catalog: Union[str, OASCatlog] ='oascomply',
         **itemkwargs,
     ):
         if itemclass is None:
             itemclass = type(self)
 
-        if not hasattr(type(self), '_catalog_cls'):
-            type(self)._set_catalog_cls()
-
-        if not isinstance(catalog, self._catalog_cls):
-            catalog = self._catalog_cls.get_catalog(catalog)
+        from oascomply.oascatalog import OASCatalog
+        if isinstance(catalog, str):
+            catalog = OASCatalog.get_catalog(catalog)
+        elif not isinstance(catalog, OASCatalog):
+            raise TypeError(f"Expected OASCatlog, got {type(catalog).__name__}")
 
         # Use the X.Y oasversion as the cacheid
         # TODO: Is cacheid still needed in the __init__ arg list?  Maybe to
@@ -231,6 +229,7 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
             catalog=catalog,
             # cacheid=cacheid,
             itemclass=itemclass,
+            metadocument_uri=self.get_oas_metadocument_uri(oasversion or '3.0'),
             **itemkwargs,
         )
 
@@ -261,123 +260,122 @@ class OASJSON(JSONSchemaContainer, OASJSONMixin):
             )
         return mapping
 
-    def resolve_references(self) -> None:
-        if self.references_resolved == True:
-            return
-        result = self.validate()
-        if not result.valid:
-            raise OASSchemaValidationError(
-                result.output('detailed'),
-            )
+#      def resolve_references(self) -> None:
+#          if self.references_resolved == True:
+#              return
+#          result = self.validate()
+#          if not result.valid:
+#              raise OASSchemaValidationError(
+#                  result.output('detailed'),
+#              )
+# 
+#          # TODO: Filter annotations - standard and extension
+#          self._annotations = [
+#              Annotation(
+#                  unit,
+#                  instance_base=self.uri.copy(fragment=None),
+#              ) for unit in result.output('basic')['annotations']
+#          ]
+# 
+#     def get_annotations(
+#         self,
+#         name: Optional[str] = None,
+#         value: Optional[str] = None,
+#         instance_location: Optional[jschon.JSONPointer] = None,
+#         schema_location: Optional[jschon.URI] = None,
+#         evaluation_path: Optional[jschon.JSONPointer] = None,
+#         single: bool = False,
+#         required: bool = False,
+#     ) -> Optional[Union[Annotation, Sequence[Annotation]]]:
+#         """
+#         """
+#         if self._annotations is None:
+#             self.validate()
+# 
+#         annotations = [
+#             a for a in self._annotations
+#             if (
+#                 (name is None or name == a.keyword) and
+#                 (value is None or value == a.value) and
+#                 (
+#                     instance_location is None or
+#                     instance_location == a.location.instance_ptr
+#                 ) and (
+#                     schema_location is None or
+#                     schema_location == a.location.schema_uri
+#                 ) and (
+#                     evaluation_path is None or
+#                     evaluation_path == a.location.evaluation_path_ptr
+#                 )
+#             )
+#         ]
+#         if required and not annotations:
+#             raise ValueError("No annotations matched!")
+#         if single:
+#             if len(annotations) > 1:
+#                 raise ValueError("Multiple annotations matched!")
+#             return annotations[0] if annotations else None
+#         return annotations
 
-        # TODO: Filter annotations - standard and extension
-        self._annotations = [
-            Annotation(
-                unit,
-                instance_base=self.uri.copy(fragment=None),
-            ) for unit in result.output('basic')['annotations']
-        ]
 
-    @property
-    def metaschema_uri(self) -> Optional[jschon.URI]:
-        """The OAS format schema for this document node.
-
-        Only document nodes with an ``oastype`` annotation have
-        metaschemas (see :class:`OASJSONSchema` for special handling
-        for Schema Objects).
-        """
-        return self.get_oas_schema_uri(self.oasversion)
-
-        if self._metaschema_uri is not None:
-            return self._metaschema_uri
-         
-        # TODO: Idea of per-oastype-object metaschemas?
-        # self._metaschema_uri = self.get_annotation(
-        #     name='oastype',
-        #     instance_location=self.path,
-        #     single=True,
-        # ).schema_uri
-
-    @metaschema_uri.setter
-    def metaschema_uri(self, metaschema_uri: Optional[URI]) -> None:
-        # Used by the parent class, duplicated because @property
-        self._metaschema_uri = metaschema_uri
-
-    def get_annotations(
+class OASJSONSchema(jschon.JSONSchema, OASJSONMixin):
+    def __init__(
         self,
-        name: Optional[str] = None,
-        value: Optional[str] = None,
-        instance_location: Optional[jschon.JSONPointer] = None,
-        schema_location: Optional[jschon.URI] = None,
-        evaluation_path: Optional[jschon.JSONPointer] = None,
-        single: bool = False,
-        required: bool = False,
-    ) -> Optional[Union[Annotation, Sequence[Annotation]]]:
-        """
-        """
-        if self._annotations is None:
-            self.validate()
+        value,
+        *args: Any,
+        oasversion: Optional[Literal['3.0', '3.1']] = None,
+        metadocument_uri: Optiona[URI] = None,
+        **kwargs: Any,
+    ):
+        self.parent = kwargs.get('parent')
 
-        annotations = [
-            a for a in self._annotations
-            if (
-                (name is None or name == a.keyword) and
-                (value is None or value == a.value) and
-                (
-                    instance_location is None or
-                    instance_location == a.location.instance_ptr
-                ) and (
-                    schema_location is None or
-                    schema_location == a.location.schema_uri
-                ) and (
-                    evaluation_path is None or
-                    evaluation_path == a.location.evaluation_path_ptr
+        if oasversion is not None:
+            self._set_oasversion(oasversion)
+
+        if metadocument_uri is None:
+            if self.oasversion == '3.0':
+                self.metadocument_uri = jschon.URI(OAS30_DIALECT_METASCHEMA)
+            elif self.oasversion == '3.1':
+                self.metadocument_uri = jschon.URI(self.document_root.data.get(
+                    'jsonSchemaDialect',
+                    "https://spec.openapis.org/oas/3.1/dialect/base",
+                ))
+            else:
+                raise ValueError(
+                    f"Unsupported OAS version {self.oasversion}",
                 )
-            )
-        ]
-        if required and not annotations:
-            raise ValueError("No annotations matched!")
-        if single:
-            if len(annotations) > 1:
-                raise ValueError("Multiple annotations matched!")
-            return annotations[0] if annotations else None
-        return annotations
+        else:
+            self.metadocument_uri = metadocument_uri
 
+        assert self.metadocument_uri is not None
+        assert self.metaschema_uri == self.metadocument_uri
 
-class OASJSONSchema(JSONSchemaContainer, OASJSONMixin):
-    _catalog_cls: ClassVar[Type[OASCatalog]]
+        super().__init__(
+            value,
+            *args,
+            metaschema_uri=self.metadocument_uri,
+            **kwargs,
+        )
 
-    @classmethod
-    def _set_catalog_cls(cls):
-        from oascomply.oascatalog import OASCatalog
-        cls._catalog_cls = OASCatalog
-
+    def pre_recursion_init(self, *args, **kwargs):
+        super().pre_recursion_init(*args, **kwargs)
+        assert self.metadocument_uri is not None
+        assert self.metaschema_uri == self.metadocument_uri
+        md = self.metadocument
+        ms = self.metaschema
+            
     @property
     def oasversion(self) -> str:
         return self.document_root.oasversion
 
-    @property
-    def metaschema_uri(self) -> Optional[jschon.URI]:
-        if (m := super().metaschema_uri) is not None:
-            return m
-        elif self.oasversion == '3.0':
-            return jschon.URI(OAS30_DIALECT_METASCHEMA)
-        elif self.oasversion == '3.1':
-            return jschon.URI(self.document_root.data.get(
-                'jsonSchemaDialect',
-                "https://spec.openapis.org/oas/3.1/dialect/base",
-            ))
-        else:
-            raise ValueError(
-                f"Unsupported OAS version {self.oasversion}",
-            )
+    def is_format_root(self) -> bool:
+        return (
+            self.type == 'object' and
+            '$id' in self.data and '$schema' in self.data
+        ) or self.format_parent is None
 
-    @metaschema_uri.setter
-    def metaschema_uri(self, metaschema_uri: Optional[URI]) -> None:
-        # Used by the parent class, duplicated because @property
-        self._metaschema_uri = metaschema_uri
-
-
-    def is_embedded_root(self) -> bool:
-        # TODO: Might need to look to first non-JSON (base class) ancestor
-        return super().is_embedded() or isinstance(self.parent, OASJSON)
+    def is_resource_root(self) -> bool:
+        return (
+            self.oasversion == '3.1' and self.type == 'object' and
+            '$id' in self.data
+        ) or self.parent is None
