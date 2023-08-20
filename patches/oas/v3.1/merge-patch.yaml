@@ -1,6 +1,6 @@
 ---
 $schema: https://spec.openapis.org/compliance/schemas/dialect/2023-06/oas-ontology
-$id: https://spec.openapis.org/compliance/schemas/oas/3.0/2023-06
+$id: https://spec.openapis.org/compliance/schemas/oas/3.1/2023-06
 oasType: OpenAPI
 oasChildren:
   0/info: 0#
@@ -9,21 +9,23 @@ oasChildren:
   0/security: securityRequirements
   0/tags: 0#
   0/paths: 0#
+  0/webhooks: 0#
   0/components: 0#
 oasLiterals:
   0/openapi: oasVersion
+  0/jsonSchemaDialect: 0#
 oasExtensible: true
 properties:
   tags:
-    oasType: Tags
+    oasTypeGroup: Tags
     oasChildren:
       0/{index}: tag
   servers:
-    oasType: Servers
+    oasTypeGroup: Servers
     oasChildren:
       0/{index}: server
   securty:
-    oasType: SecurityRequirements
+    oasTypeGroup: SecurityRequirements
     oasChildren:
       0/{index}: securityRequirement
 
@@ -33,16 +35,55 @@ $defs:
     type: string
     pattern: \$(url$|method$|statusCode$|request\.|response\.)
 
-  # TODO: Callbacks not well-understood
-  Callback:
+  specification-extensions:
+    oasExtensible: true
+
+  # Unless noted, the non-ref $defs is only referenced through these
+  callbacks-or-reference:
     oasType: Callback
     oasReferences:
       0/$ref: Callback
+  example-or-reference:
+    oasType: Example
+    oasReferences:
+      0/$ref: Example
+  header-or-reference:
+    oasType: Header
+    oasReferences:
+      0/$ref: Header
+  link-or-reference:
+    oasType: Link
+    oasReferences:
+      0/$ref: Link
+  parameter-or-reference:
+    oasType: Parameter
+    oasReferences:
+      0/$ref: Parameter
+  path-item-or-reference:
+    # #/$defs/path-time is *not* always referenced through this schema
+    oasType: PathItem
+    oasReferences:
+      0/$ref: PathItem
+  request-body-or-reference:
+    oasType: RequestBody
+    oasReferences:
+      0/$ref: RequestBody
+  response-or-reference:
+    oasType: Response
+    oasReferences:
+      0/$ref: Response
+  security-scheme-or-reference:
+    oasType: SecurityScheme
+    oasReferences:
+      0/$ref: SecurityScheme
+
+
+  # TODO: Callbacks not well-understood
+  callbacks:
     oasChildren:
       0/{name}/{pathTemplate}: callback
-    oasExtensible: true
 
-  Components:
+  components:
     oasType: Components
     oasExtensible: true
     oasChildren:
@@ -52,87 +93,49 @@ $defs:
         oasType: CallbackComponents
         oasChildren:
             0/{name}: namedCallback
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Callback
       examples:
         oasType: ExampleComponents
         oasChildren:
             0/{name}: namedExample
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Example
       headers:
         oasType: HeaderComponents
         oasChildren:
             0/{name}: namedHeader
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Header
       links:
         oasType: LinkComponents
         oasChildren:
             0/{name}: namedLink
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Link
+      pathItems:
+        oasType: PathItemComponents
+        oasChildren:
+            0/{name}: namedPathItem
       parameters:
         oasType: ParameterComponents
         oasChildren:
             0/{name}: namedParameter
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Parameter
       requestBodies:
         oasType: RequestBodyComponents
         oasChildren:
             0/{name}: namedRequestBody
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: RequestBody
       responses:
         oasType: ResponseComponents
         oasChildren:
             0/{name}: namedResponse
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Response
       schemas:
         oasType: SchemaComponents
         oasChildren:
             0/{name}: namedSchema
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: Schema
       securitySchemes:
         oasType: SecuritySchemeComponents
         oasChildren:
             0/{name}: namedSecurityScheme
-        patternProperties:
-          ^[a-zA-Z0-9\.\-_]+$:
-            oasReferences:
-              0/$ref: SecurityScheme
-    patternProperties:
-      ^x-:
-        oasType: ExtensionComponents
-        oasChildren:
-            0/{name}: namedExtensionComponents
 
-  Contact:
+  contact:
     oasType: Contact
     oasLiterals:
       0/name: 0#
       0/url: 0#
       0/email: 0#
-    oasExtensible: true
 
   Discriminator:
     oasType: Discriminator
@@ -215,13 +218,14 @@ $defs:
         oasReferences:
           0/$ref: Schema
 
-  Info:
+  info:
     oasType: Info
     oasChildren:
       0/contact: 0#
       0/license: 0#
     oasLiterals:
       0/title: 0#
+      0/summary: 0#
       0/description: 0#
       0/version: apiDescriptionVersion
     oasDescriptionLinks:
@@ -231,13 +235,13 @@ $defs:
       description:
         format: commonmark
 
-  License:
+  license:
     oasType: License
     oasLiterals:
       0/name: 0#
+      0/identifier: 0#
     oasDescriptionLinks:
       0/url: 0#
-    oasExtensible: true
 
   Link:
     oasType: Link
@@ -403,20 +407,23 @@ $defs:
   CookieParameter:
     oasType: CookieParameter
 
-  PathItem:
+  path-item:
     oasType: PathItem
     oasChildren:
       0/parameters: 0#
       0/servers: 0#
       # TODO: Some way to insert an operations -> Operations node
-      0/delete: operation
-      0/get: operation
-      0/head: operation
-      0/options: operation
-      0/patch: operation
-      0/post: operation
-      0/put: operation
-      0/trace: operation
+    oasIntermediate:
+      oasTypeGroup: Operations
+      oasChildren:
+        0/delete: operation
+        0/get: operation
+        0/head: operation
+        0/options: operation
+        0/patch: operation
+        0/post: operation
+        0/put: operation
+        0/trace: operation
     oasReferences:
       0/$ref: PathItem
     oasReferenceConflict:
@@ -455,11 +462,10 @@ $defs:
       trace:
         oasType: TraceOperation
 
-  Paths:
+  paths:
     oasType: Paths
     oasChildren:
       0/{pathTemplate}: pathItem
-    oasExtensible: true
 
   Reference:
     oasType: Reference
@@ -595,7 +601,7 @@ $defs:
         oasRelationType: securitySchemeScopeRef
         oasTargetType: SecurityScheme
         oasTargetField: 0/{scheme}/flows/{flow}/scopes/{scope}#
-  Server:
+  server:
     oasType: Server
     oasChildren:
       0/variables/{name}: variable
@@ -609,7 +615,7 @@ $defs:
       url:
         oasType: TemplatedUrl
 
-  ServerVariable:
+  server-variable:
     oasType: ServerVariable
     oasImplicitReferences:
       '0#':
