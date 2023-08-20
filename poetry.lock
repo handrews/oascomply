@@ -417,7 +417,7 @@ test = ["tox"]
 type = "git"
 url = "https://github.com/handrews/jschon.git"
 reference = "oas3-m2-take2"
-resolved_reference = "b5d968a880f4a1a5865773ba7d1ce0d1e507bd6a"
+resolved_reference = "6fb197ca3ee95facff10dda2169a10a0d4063fc5"
 
 [[package]]
 name = "json-merge-patch"
