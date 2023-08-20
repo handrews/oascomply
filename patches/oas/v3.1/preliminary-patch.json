@@ -14,7 +14,7 @@
   },
   {
     "op": "add",
-    "path": "/$defs/path-item/$ref",
+    "path": "/$defs/path-item/properties/$ref",
     "value": {"type": "string", "format": "uri-reference"}
   },
   {
@@ -29,7 +29,7 @@
   },
   {
     "op": "replace",
-    "path": "/$defs/components/pathItems/additionalProperties",
+    "path": "/$defs/components/properties/pathItems/additionalProperties",
     "value": {"$ref": "#/$defs/path-item"}
   }
 ]
