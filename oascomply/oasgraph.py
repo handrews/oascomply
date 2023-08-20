@@ -31,6 +31,12 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+OAS31_INDEX: {
+    'Callback': '/$defs/callbacks-or-reference',
+    'Example': '/$defs/example-or-reference',
+}
+
+
 
 OUTPUT_FORMATS_LINE = frozenset({
     'nt11',                     # N-Triples UTF-8 encoded (default)

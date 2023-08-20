@@ -26,12 +26,16 @@ __all__ = [
     'OASDocumentError',
     'OASUnsupportedVersionError',
     'OASVersionConflictError',
+    'OASVersionMissingError',
 ]
 
 logger = logging.getLogger(__name__)
 
 
 class OASDocumentError(OASComplyError):
+    pass
+
+class OASVersionMissingError(OASDocumentError):
     pass
 
 class OASUnsupportedVersionError(OASDocumentError):
@@ -69,8 +73,24 @@ class OASJSONMixin:
                 # We don't need a path as loading this dialect is managed by
                 # the oascomply.oas30dialect module.
                 'uri': OAS30_DIALECT_METASCHEMA,
+                'vocab-meta': {},
             },
         },
+        '3.1': {
+            'schema': {
+                'uri': "https://spec.openapis.org/oas/3.1/schema/2022-10-07",
+                'path': (
+                    pathlib.Path(__file__).parent
+                    / '..'
+                    / 'submodules'
+                    / 'OpenAPI-Specification'
+                    / 'schemas'
+                    / 'v3.1'
+                    / 'schema.json'
+                ).resolve(),
+            },
+            'dialect': {
+
     }
 
     _oasversion: Optional[str] = None
@@ -81,7 +101,7 @@ class OASJSONMixin:
         if self._oasversion is None:
             if self is self.document_root:
                 if 'openapi' not in self.data:
-                    raise ValueError(
+                    raise OASVersionMissingError(
                         f"{type(self)} requires the 'openapi' field "
                         "or an 'oasversion' constructor parameter",
                     )
@@ -99,9 +119,7 @@ class OASJSONMixin:
 
     def _set_oasversion(self, oasversion: str) -> None:
         if oasversion not in self.SUPPORTED_OAS_VERSIONS:
-            raise OASUnsupportedVersionError(
-                oasversion, uri=self.uri, url=self.url,
-            )
+            raise OASUnsupportedVersionError(oasversion)
 
         if self is self.document_root:
             if (
@@ -210,6 +228,25 @@ class OASJSON(JSONFormat, OASJSONMixin):
         if itemclass is None:
             itemclass = type(self)
 
+        # Also set in superclass constructor, but needed prior to that.
+        self.parent = parent
+
+        if oasversion is not None:
+            self._set_oasversion(oasversion)
+        else:
+            has_oasjson_parent = \
+                parent is not None and isinstance(parent, OASJSON)
+            if has_oasjson_parent:
+                self._set_oasversion(parent.oasversion)
+            elif 'openapi' in value:
+                v = value['openapi']
+                self._set_oasversion(v[:v.rindex('.')])
+            else:
+                raise OASVersionMissingError(
+                    "OASJSON requires the oasversion parameter for document "
+                    "roots if no 'openapi' field is present.",
+                )
+        
         from oascomply.oascatalog import OASCatalog
         if isinstance(catalog, str):
             catalog = OASCatalog.get_catalog(catalog)
@@ -366,6 +403,8 @@ class OASJSONSchema(jschon.JSONSchema, OASJSONMixin):
             
     @property
     def oasversion(self) -> str:
+        if self.document_root is self:
+            return self._oasversion
         return self.document_root.oasversion
 
     def is_format_root(self) -> bool:
