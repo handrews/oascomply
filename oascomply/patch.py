@@ -146,10 +146,10 @@ def yaml_to_json():
         kwargs['separators'] = (',', ':')
 
     for index, infile in enumerate(infiles):
-        with infile.open() as in_fp, outfiles[index].open(
+        with infile.open() as in_fd, outfiles[index].open(
             'w', encoding='utf-8'
-        ) as out_fp:
-            json.dump(yaml.safe_load(in_fp), out_fp, **kwargs)
+        ) as out_fd:
+            json.dump(yaml.safe_load(in_fd), out_fd, **kwargs)
 
 
 def validate_schema(schema_data: Union[Mapping, bool], *metaschema_data: Sequence[Mapping], error_format='detailed'):
@@ -234,24 +234,33 @@ def apply_patches(target, patch_info):
         schema['$defs'] = defs
 
     print('Vaidating patched schema against its metaschema ...')
-    with COMPLIANCE_VOCAB_METASCHEMA.open(encoding='utf-8') as vm_fp, \
-         COMPLIANCE_DIALECT_METASCHEMA.open(encoding='utf-8') as dm_fp:
-        vmeta = json.load(vm_fp)
-        dmeta = json.load(dm_fp)
+    with COMPLIANCE_VOCAB_METASCHEMA.open(encoding='utf-8') as vm_fd, \
+         COMPLIANCE_DIALECT_METASCHEMA.open(encoding='utf-8') as dm_fd:
+        vmeta = json.load(vm_fd)
+        dmeta = json.load(dm_fd)
 
     if schema_errors := validate_schema(schema, vmeta, dmeta):
         sys.stderr.write('Metaschema validation failed!\n\n')
         json.dump(schema_errors, sys.stderr, indent=2, ensure_ascii=False)
-        sys.stderr.write('\n')
-        sys.exit(-1)
+        
+        invalid = patch_info['outfile'].parent / (
+            patch_info['outfile'].with_suffix('.INVALID').name + '.json'
+        )
+
+        sys.stderr.write(f'\nSee {invalid} for patched schema contents\n')
+        with open(invalid, 'w', encoding='utf-8') as invalid_fd:
+            json.dump(schema, invalid_fd, indent=2, allow_nan=False)
+            invalid_fd.write('\n')
+        return False
 
     patched_file = patch_info['outfile']
     print(f'Writing patched schema to "{patched_file}" ...')
-    with open(patched_file, 'w', encoding='utf-8') as patched_fp:
+    with open(patched_file, 'w', encoding='utf-8') as patched_fd:
         # For some reason there is no option for json.dump() to
         # include a trailing newline.
-        json.dump(schema, patched_fp, indent=2, allow_nan=False)
-        patched_fp.write('\n')
+        json.dump(schema, patched_fd, indent=2, allow_nan=False)
+        patched_fd.write('\n')
+    return True
 
 
 def patch():
@@ -261,11 +270,15 @@ def patch():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args()
 
+    success = True
     for oasversion in PATCHES:
         for target in PATCHES[oasversion]:
             print(f'Patching schema "{target}"...')
-            apply_patches(target, PATCHES[oasversion][target])
+            success &= apply_patches(target, PATCHES[oasversion][target])
             print(f'...done with schema "{target}"')
             print()
-    print("Done with all schemas!")
+    if success:
+        print("Done with all schemas!")
+    else:
+        print("Some patches produced invalid schema(s)!", file=sys.stderr)
     print()
