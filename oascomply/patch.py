@@ -265,13 +265,22 @@ def apply_patches(target, patch_info):
 
 def patch():
     """Entry point for generating a patche OAS 3.0 schema (3.1 forthcoming)."""
-    argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=PATCH_SCHEMAS_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter,
-    ).parse_args()
+    )
+    parser.add_argument(
+        'versions',
+        nargs='*',
+        help='OAS versions to patch in X.Y form; all versions are patched '
+            'if no versions are passed.'
+    )
+    args = parser.parse_args()
 
     success = True
     for oasversion in PATCHES:
+        if args.versions and oasversion not in args.versions:
+            continue
         for target in PATCHES[oasversion]:
             print(f'Patching schema "{target}"...')
             success &= apply_patches(target, PATCHES[oasversion][target])
