@@ -255,9 +255,6 @@ $defs:
         - 0/schema
       encodings:
         - 0/encoding/{property}
-      examples:
-        oasReferences:
-          0/$ref: Example
 
   oauth-flows:
     oasType: OAuthFlows
@@ -558,17 +555,17 @@ $defs:
     properties:
       description:
         format: commonmark
-  $defs:
-    type-apikey:
-      then:
-        oasType: APIKeySecurityScheme
-    type-http:
-      # We do not track type-http-bearer separately, and this subschema annotates both
-      then:
-        oasType: HTTPSecurityScheme
-    type-oauth2:
-      then:
-        oasType: OAuth2SecurityScheme
-    type-oidc:
-      then:
-        oasType: OpenIdConnectSecurityScheme
+    $defs:
+      type-apikey:
+        then:
+          oasType: APIKeySecurityScheme
+      type-http:
+        # We do not track type-http-bearer separately, and this subschema annotates both
+        then:
+          oasType: HTTPSecurityScheme
+      type-oauth2:
+        then:
+          oasType: OAuth2SecurityScheme
+      type-oidc:
+        then:
+          oasType: OpenIdConnectSecurityScheme
