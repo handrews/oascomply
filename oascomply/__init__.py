@@ -12,7 +12,10 @@ from oascomply.oascatalog import (
         OASCatalog, initialize_oas_specification_schemas,
 )
 from oascomply.oassource import DirectMapSource
-from oascomply.oas3dialect import initialize_oas30_dialect
+from oascomply.oas3dialect import (
+    initialize_oas30_dialect,
+    initialize_oas31_dialect,
+)
 from oascomply.patch import (
     PATCHED_OAS30_SCHEMA_DIR,
     PATCHED_OAS31_SCHEMA_PATH,
@@ -61,11 +64,11 @@ catalog.add_uri_source(
     None,
     DirectMapSource(
         {
-            'https://spec.openapis.org/oas/3.1/schema/2022-10-07':
+            jschon.URI('https://spec.openapis.org/oas/3.1/schema/2022-10-07'):
                 PATCHED_OAS31_SCHEMA_PATH,
-            'https://spec.openapis.org/oas/3.1/dialect/base':
+            jschon.URI('https://spec.openapis.org/oas/3.1/dialect/strict'):
                 PATCHED_OAS31_DIALECT_PATH,
-            'https://spec.openapis.org/oas/3.1/meta/base':
+            jschon.URI('https://spec.openapis.org/oas/3.1/meta/base'):
                 PATCHED_OAS31_META_PATH,
         },
         suffixes=('.json',)
@@ -75,4 +78,5 @@ catalog.add_uri_source(
 
 _2020_12.initialize(catalog)
 initialize_oas30_dialect(catalog)
+initialize_oas31_dialect(catalog)
 initialize_oas_specification_schemas(catalog)

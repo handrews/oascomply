@@ -142,7 +142,11 @@ class ContentParser:
                     '(can disable with -n if slow)',
                 )
                 sourcemap = jmap.calculate(content)
-            return ParsedContent(value=data, url=url, sourcemap=sourcemap)
+            return ParsedContent(
+                value=data,
+                url=pathlib.Path(full_path).as_uri(),
+                sourcemap=sourcemap,
+            )
         except json.JSONDecodeError as e:
             raise CatalogError(str(e)) from e
 
