@@ -13,6 +13,7 @@ import os
 import sys
 
 import jschon
+import jschon.exc
 from jschon.jsonformat import JSONFormat
 from jschon.vocabulary import Metaschema
 
@@ -35,7 +36,6 @@ from oascomply.oas3dialect import (
     OAS31_SCHEMA,
     OAS31_DIALECT_METASCHEMA,
 )
-import oascomply.resourceid as rid
 
 __all__ = [
     'ApiDescription',
@@ -236,22 +236,18 @@ class ThingToUri:
     def set_iri(
         self,
         iri_str: str,
-        iri_class: Type[rid.Iri] = rid.Iri,
         attrname: str = 'uri',
     ) -> None:
+        iri = jschon.URI(iri_str)
         try:
-            setattr(self, attrname, iri_class(iri_str))
-        except ValueError as e1:
-            try:
-                rid.IriReference(iri_str)
-                raise ValueError(f'{iri_class.__name__} cannot be relative')
-            except ValueError as e2:
-                logger.debug(
-                    f'got exception from IriReference({iri_str}):'
-                    f'\n\t{e2}'
-                )
-                # propagate the original error as it will be more informative
-                raise e1
+            iri.validate(require_scheme=True)
+            setattr(self, attrname, (iri))
+        except jschon.exc.URIError:
+            logger.debug(
+                f'got exception from IriReference({iri_str}):'
+                f'\n\t{e2}'
+            )
+            raise ValueError(f'{iri_class.__name__} cannot be relative')
 
     def iri_str_from_thing(self, stripped_thing_str: str) -> str:
         return stripped_thing_str
@@ -301,12 +297,12 @@ class UrlToUri(ThingToUri):
         return self.url
 
     @property
-    def url(self) -> rid.Iri:
+    def url(self) -> jschon.URI:
         """Accessor for ``url``, the "thing" of this ThingToUri subclass."""
         return self._url
 
     @url.setter
-    def url(self, u: rid.Iri) -> None:
+    def url(self, u: jschon.URI) -> None:
         self._url = u
 
     @property
@@ -458,7 +454,7 @@ class ApiDescription:
         elif isinstance(resource_uri, str):
             # TODO: IRI vs URI
             # TODO: Non-JSON Pointer fragments in 3.1
-            resource_uri = rid.IriWithJsonPtr(resource_uri)
+            resource_uri = jschon.URI(str)
 
         # TODO: Don't hardcode 3.0
         resource = oascomply.catalog.get_resource(

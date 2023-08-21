@@ -19,7 +19,6 @@ from oascomply.ptrtemplates import (
     JSON_POINTER_TEMPLATE, RELATIVE_JSON_POINTER_TEMPLATE,
     RelJsonPtrTemplate,
 )
-import oascomply.resourceid as rid
 
 __all__ = [
     'initialize_oas30_dialect',

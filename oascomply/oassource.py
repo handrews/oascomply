@@ -19,7 +19,6 @@ import json_source_map as jmap
 import yaml_source_map as ymap
 from yaml_source_map.errors import InvalidYamlError
 
-from oascomply import resourceid as rid
 from oascomply.ptrtemplates import (
     JSON_POINTER_TEMPLATE, RELATIVE_JSON_POINTER_TEMPLATE,
     RelJsonPtrTemplate,
@@ -397,7 +396,7 @@ class FileMultiSuffixSource(MultiSuffixSource, FileLoader):
 
 class HttpMultiSuffixSource(MultiSuffixSource, HttpLoader):
     def _validate_prefix(self, prefix: str) -> str:
-        parsed_prefix = rid.Iri(prefix)
+        parsed_prefix = jschon.URI(prefix)
         if not parsed_prefix.path.endswith('/'):
             raise ValueError(f'{prefix!r} must contain a path ending with "/"')
 
