@@ -30,7 +30,7 @@ properties:
       0/{index}: securityRequirement
 
 $defs:
-  RuntimeExpression:
+  runtime-expression:
     oasType: RuntimeExpression
     type: string
     pattern: \$(url$|method$|statusCode$|request\.|response\.)
@@ -137,33 +137,20 @@ $defs:
       0/url: 0#
       0/email: 0#
 
-  Discriminator:
-    oasType: Discriminator
-    oasImplicitReferences:
-      0/propertyName:
-        oasTargetType: Schema
-    properties:
-      mapping:
-        additionalProperties:
-          oasValues:
-            mappingName: '0#'
-            mappingTarget: '0'
+  content:
+    oasTypeGroup: MediaTypes
 
-  Encoding:
+  encoding:
     oasType: Encoding
     oasChildren:
       0/headers/{header}: header
     oasLiterals:
+      0/contentType: 0#
       0/style: 0#
       0/explode: 0#
       0/allowReserved: 0#
-    properties:
-      headers:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Header
 
-  Example:
+  example:
     oasType: Example
     oasLiterals:
       0/summary: 0#
@@ -171,35 +158,31 @@ $defs:
       0/value: 0#
     oasDescriptionLinks:
       0/externalValue: 0#
-    oasExtensible: true
     properties:
       description:
         format: commonmark
 
-  ExternalDocumentation:
+  external-documentation:
     oasType: ExternalDocumentation
     oasLiterals:
       0/description: 0#
     oasDescriptionLinks:
       0/url: 0#
-    oasExtensible: true
     properties:
       description:
         format: commonmark
 
-  Header:
+  header:
     oasType: Header
     oasChildren:
       0/schema: 0#
-      0/{contentType}: content # TODO: Is this the same as "content" elsewhere?
+      0/content/{contentType}: 1#
     oasLiterals:
       0/description: 0#
       0/required: 0#
       0/deprecated: 0#
-      0/allowEmptyValue: 0#
       0/style: 0#
       0/explode: 0#
-      0/allowReserved: 0#
     oasExamples:
       examples:
         - 0/example
@@ -210,13 +193,6 @@ $defs:
     properties:
       description:
         format: commonmark
-      schema:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Schema
-      schema:
-        oasReferences:
-          0/$ref: Schema
 
   info:
     oasType: Info
@@ -243,7 +219,7 @@ $defs:
     oasDescriptionLinks:
       0/url: 0#
 
-  Link:
+  link:
     oasType: Link
     oasImplicitReferences:
       0/operationId:
@@ -263,9 +239,10 @@ $defs:
     oasReferences:
         0/operationRef: Operation
     oasChildren:
+      # TODO: Is this set up with an oasType anywhere?
       0/parameters/{parameterSpecification}: parameterSpecification
 
-  MediaType:
+  media-type:
     oasType: MediaType
     oasChildren:
       0/schema: 0#
@@ -278,35 +255,49 @@ $defs:
         - 0/schema
       encodings:
         - 0/encoding/{property}
-    properties:
       examples:
         oasReferences:
           0/$ref: Example
-      schema:
-        oasReferences:
-          0/$ref: Schema
 
-  OAuthFlows:
-    oasLiterals:
-      0/scopes/{scopeName}: scope
-    oasApiLinks:
-      0/authorizationUrl: 0#
-      0/tokenUrl: 0#
-      0/refreshUrl: 0#
-    oasExtensible: true
-    patternProperties:
-      ^x-:
-        oasType: ExtensionOAuthFlow
-  ImplicitOAuthFlow:
-    oasType: ImplicitOAuthFlow
-  PasswordOAuthFlow:
-    oasType: PasswordOAuthFlow
-  ClientCredentialsFlow:
-    oasType: ClientCredentialsFlow
-  AuthorizationCodeOAuthFlow:
-    oasType: AuthorizationCodeOAuthFlow
+  oauth-flows:
+    oasType: OAuthFlows
+    oasChildren:
+      0/implicit: oauthFlowImplicit
+      0/password: oauthFlowPassword
+      0/clientCredentials: oauthFlowClientCredentials
+      0/authorizationCode: oauthFlowAuthorizationCode
+    $defs:
+      implicit:
+        oasType: ImplicitOAuthFlow
+        oasLiterals:
+          0/scopes/{scopeName}: scope
+        oasApiLinks:
+          0/authorizationUrl: 0#
+          0/refreshUrl: 0#
+      password:
+        oasType: PasswordOAuthFlow
+        oasLiterals:
+          0/scopes/{scopeName}: scope
+        oasApiLinks:
+          0/tokenUrl: 0#
+          0/refreshUrl: 0#
+      client-credentials:
+        oasType: ClientCredentialsFlow
+        oasLiterals:
+          0/scopes/{scopeName}: scope
+        oasApiLinks:
+          0/tokenUrl: 0#
+          0/refreshUrl: 0#
+      authorization-code:
+        oasType: AuthorizationCodeOAuthFlow
+        oasLiterals:
+          0/scopes/{scopeName}: scope
+        oasApiLinks:
+          0/authorizationUrl: 0#
+          0/tokenUrl: 0#
+          0/refreshUrl: 0#
 
-  Operation:
+  operation:
     # for oasType, see /$defs/PathItem/properties/(get|put|...)
     oasChildren:
       0/externalDocs: 0#
@@ -316,6 +307,7 @@ $defs:
       0/callbacks: 0#
       0/security: securityRequirements
       0/servers: 0#
+      0/tags: 0#
     oasLiterals:
       0/summary: 0#
       0/description: 0#
@@ -329,39 +321,30 @@ $defs:
         - 0/parameters/{index}
         - 2/parameters/{index}
     properties:
-      callbacks:
-        additionalProperties:
-          oasReference:
-            0/$ref: Callback
       description:
         format: commonmark
       parameters:
         oasType: Parameters
         oasChildren:
           0/{index}: parameter
-        items:
-          oasReferences:
-            0/$ref: Parameter
-      requestBody:
-        oasReferences:
-          0/$ref: RequestBody
       security:
-        oasType: SecurityRequirement
+        oasTypeGroup: SecurityRequirements
         oasChildren:
           0/{index}: securityRequirement
       servers:
-        oasType: Servers
+        oasTypeGroup: Servers
         oasChildren:
           0/{index}: server
       tags:
-        oasType: Tags
+        oasTypeGroup: Tags
         oasImplicitReferences:
           0/{index}:
             oasRelationType: tagRef
             oasTargetType: Tag
             oasTargetField: 0/name
             oasTargetRequired: False
-  Parameter:
+
+  parameter:
     oasChildren:
       0/schema: 0#
       0/content/{contentType}: 1#
@@ -388,31 +371,28 @@ $defs:
     properties:
       description:
         format: commonmark
-      examples:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Example
-      schema:
-        oasReferences:
-          0/$ref: Schema
-  PathParameter:
-    oasType: PathParameter
-    properties:
-      name:
-        oasType: TemplateParameter
-  QueryParameter:
-    oasType: QueryParameter
-  HeaderParameter:
-    oasType: HeaderParameter
-  CookieParameter:
-    oasType: CookieParameter
+    $defs:
+      styles-for-path:
+        then:
+          oasType: PathParameter
+          properties:
+          name:
+            oasType: TemplateParameter
+      styles-for-query:
+        then:
+          oasType: QueryParameter
+      styles-for-header:
+        then:
+          oasType: HeaderParameter
+      styles-for-cookie:
+        then:
+          oasType: CookieParameter
 
   path-item:
     oasType: PathItem
     oasChildren:
       0/parameters: 0#
       0/servers: 0#
-      # TODO: Some way to insert an operations -> Operations node
     oasIntermediate:
       oasTypeGroup: Operations
       oasChildren:
@@ -442,7 +422,7 @@ $defs:
           oasReferences:
             0/$ref: Parameter
       servers:
-        oasType: Servers
+        oasTypeGroup: Servers
         oasChildren:
           0/{index}: server
       delete:
@@ -466,23 +446,33 @@ $defs:
     oasType: Paths
     oasChildren:
       0/{pathTemplate}: pathItem
+    propertyNames:
+      if:
+        pattern: ^/
+      then:
+        oasType: TemplatedUrl
 
-  Reference:
+  reference:
     oasType: Reference
+    oasLiterals:
+      0/summary: 0#
+      0/description: 0#
+    properties:
+      description:
+        format: commonmark
 
-  RequestBody:
+  request-body:
     oasType: RequestBody
     oasChildren:
       0/content/{contentType}: content
     oasLiterals:
       0/description: 0#
       0/required: 0#
-    oasExtensible: True
     properties:
       description:
         format: commonmark
 
-  Response:
+  response:
     oasType: Response
     oasChildren:
       0/headers/{header}: header
@@ -494,104 +484,18 @@ $defs:
     properties:
       description:
         format: commonmark
-      headers:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Header
-      links:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Link
 
-  Responses:
+  responses:
     oasType: Responses
     oasChildren:
       0/{statusSpecification}: response
-    oasExtensible: true
-    properties:
-      default:
-        oasReferences:
-          0/$ref: Response
-    patternProperties:
-      ^[1-5](?:\d{2}|XX)$:
-        oasReferences:
-          0/$ref: Response
 
-  Schema:
+  schema:
+    # See dialect meta-schema for details
     oasType: Schema
-    oasChildren:
-      0/allOf/{index}: schemaAllOf
-      0/anyOf/{index}: schemaAnyOf
-      0/oneOf/{index}: schemaOneOf
-      0/not: schemaNot
-      0/properties/{name}: schemaProperty
-      0/additionalProperties: schemaAdditionalProperties
-      0/items: schemaItems
-      0/xml: xmlSerialization
-      0/discriminator: discriminator
-      0/externalDocs: externalDocs
-    oasLiterals:
-      0/type: schemaType
-      0/enum: schemaEnum
-      0/maximum: schemaMaximum
-      0/minimum: schemaMinimum
-      0/exclusiveMaximum: schemaExclusiveMaximum
-      0/exclusiveMinimum: schemaExclusiveMinimum
-      0/multipleOf: schemaMultipleOf
-      0/maxLength: schemaMaxLength
-      0/minLength: schemaMinLength
-      0/pattern: schemaPattern
-      0/maxItems: schemaMaxItems
-      0/minItems: schemaMinItems
-      0/uniqueItems: schemaUniqueItems
-      0/maxProperties: schemaMaxProperties
-      0/minProperties: schemaMinProperties
-      0/required: schemaRequired
-      0/title: schemaTitle
-      0/description: schemaDescription
-      0/format: schemaFormat
-      0/default: schemaDefault
-      0/readOnly: schemaReadOnly
-      0/writeOnly: schemaWriteOnly
-      0/deprecated: schemaDeprecated
-      0/nullable: schemaNullable
-    oasExamples:
-      examples:
-        - 0/example
-        - 0/default
-    oasExtensible: True
-    properties:
-      additionalProperties:
-        oasReferences:
-          0/$ref: Schema
-      allOf:
-        items:
-          oasReferences:
-            0/$ref: Schema
-      anyOf:
-        items:
-          oasReferences:
-            0/$ref: Schema
-      description:
-        format: commonmark
-      items:
-        oasReferences:
-          0/$ref: Schema
-      not:
-        oasReferences:
-          0/$ref: Schema
-      oneOf:
-        items:
-          oasReferences:
-            0/$ref: Schema
-      properties:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Schema
 
-  SecurityRequirement:
+  security-requirement:
     oasType: SecurityRequirement
-    additionalProperties:
     oasImplicitReferences:
       0/{scheme}#:
         oasRelationType: securitySchemeRef
@@ -601,6 +505,7 @@ $defs:
         oasRelationType: securitySchemeScopeRef
         oasTargetType: SecurityScheme
         oasTargetField: 0/{scheme}/flows/{flow}/scopes/{scope}#
+
   server:
     oasType: Server
     oasChildren:
@@ -632,35 +537,38 @@ $defs:
       description:
         format: commonmark
 
-  XML:
-    oasType: Xml
-    oasLiterals:
-      0/name: 0#
-      0/namespace: xmlNamespace
-      0/prefix: xmlPrefix
-      0/attribute: xmlAttribute
-      0/wrapped: 0#
-    oasExtensible: true
-
-  Tag:
+  tag:
     oasType: Tag
-
-  SecurityScheme:
+    oasChildren:
+      0/externaDocs: 0#
     oasLiterals:
-      0/type: 0#
       0/name: 0#
-      0/in: parameteLocation
       0/description: 0#
-    oasExtensible: true
     properties:
       description:
         format: commonmark
-  APIKeySecurityScheme:
-    oasType: APIKeySecurityScheme
-  HTTPSecurityScheme:
-    oasType: HTTPSecurityScheme
-  OAuth2SecurityScheme:
-    oasType: OAuth2SecurityScheme
-  OpenIdConnectSecurityScheme:
-    oasType: OpenIdConnectSecurityScheme
 
+  security-scheme:
+    oasLiterals:
+      0/type: 0#
+      0/name: 0#
+      0/scheme: 0#
+      0/in: parameterLocation
+      0/description: 0#
+    properties:
+      description:
+        format: commonmark
+  $defs:
+    type-apikey:
+      then:
+        oasType: APIKeySecurityScheme
+    type-http:
+      # We do not track type-http-bearer separately, and this subschema annotates both
+      then:
+        oasType: HTTPSecurityScheme
+    type-oauth2:
+      then:
+        oasType: OAuth2SecurityScheme
+    type-oidc:
+      then:
+        oasType: OpenIdConnectSecurityScheme

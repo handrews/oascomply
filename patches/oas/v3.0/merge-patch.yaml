@@ -15,15 +15,15 @@ oasLiterals:
 oasExtensible: true
 properties:
   tags:
-    oasType: Tags
+    oasTypeGroup: Tags
     oasChildren:
       0/{index}: tag
   servers:
-    oasType: Servers
+    oasTypeGroup: Servers
     oasChildren:
       0/{index}: server
   securty:
-    oasType: SecurityRequirements
+    oasTypeGroup: SecurityRequirements
     oasChildren:
       0/{index}: securityRequirement
 
@@ -151,6 +151,7 @@ $defs:
     oasChildren:
       0/headers/{header}: header
     oasLiterals:
+      0/content-type: 0#
       0/style: 0#
       0/explode: 0#
       0/allowReserved: 0#
@@ -188,7 +189,7 @@ $defs:
     oasType: Header
     oasChildren:
       0/schema: 0#
-      0/{contentType}: content # TODO: Is this the same as "content" elsewhere?
+      0/content/{contentType}: 1#  # TODO: oasIntermediate?
     oasLiterals:
       0/description: 0#
       0/required: 0#
@@ -207,10 +208,6 @@ $defs:
     properties:
       description:
         format: commonmark
-      schema:
-        additionalProperties:
-          oasReferences:
-            0/$ref: Schema
       schema:
         oasReferences:
           0/$ref: Schema
@@ -259,6 +256,8 @@ $defs:
     oasReferences:
         0/operationRef: Operation
     oasChildren:
+      # TODO: Is this set up with an oasType anywhere?
+      #       Also, could this schema be strengthened to map-of-strings as in 3.1?
       0/parameters/{parameterSpecification}: parameterSpecification
 
   MediaType:
@@ -283,24 +282,42 @@ $defs:
           0/$ref: Schema
 
   OAuthFlows:
+    oasType: OAuthFlows
+    oasChildren:
+      0/implicit: oauthFlowImplicit
+      0/password: oauthFlowPassword
+      0/clientCredentials: oauthFlowClientCredentials
+      0/authorizationCode: oauthFlowAuthorizationCode
+    oasExtensible: true
+  ImplicitOAuthFlow:
+    oasType: ImplicitOAuthFlow
+    oasLiterals:
+      0/scopes/{scopeName}: scope
+    oasApiLinks:
+      0/authorizationUrl: 0#
+      0/refreshUrl: 0#
+  PasswordOAuthFlow:
+    oasType: PasswordOAuthFlow
+    oasLiterals:
+      0/scopes/{scopeName}: scope
+    oasApiLinks:
+      0/tokenUrl: 0#
+      0/refreshUrl: 0#
+  ClientCredentialsFlow:
+    oasType: ClientCredentialsFlow
+    oasLiterals:
+      0/scopes/{scopeName}: scope
+    oasApiLinks:
+      0/tokenUrl: 0#
+      0/refreshUrl: 0#
+  AuthorizationCodeOAuthFlow:
+    oasType: AuthorizationCodeOAuthFlow
     oasLiterals:
       0/scopes/{scopeName}: scope
     oasApiLinks:
       0/authorizationUrl: 0#
       0/tokenUrl: 0#
       0/refreshUrl: 0#
-    oasExtensible: true
-    patternProperties:
-      ^x-:
-        oasType: ExtensionOAuthFlow
-  ImplicitOAuthFlow:
-    oasType: ImplicitOAuthFlow
-  PasswordOAuthFlow:
-    oasType: PasswordOAuthFlow
-  ClientCredentialsFlow:
-    oasType: ClientCredentialsFlow
-  AuthorizationCodeOAuthFlow:
-    oasType: AuthorizationCodeOAuthFlow
 
   Operation:
     # for oasType, see /$defs/PathItem/properties/(get|put|...)
@@ -312,6 +329,7 @@ $defs:
       0/callbacks: 0#
       0/security: securityRequirements
       0/servers: 0#
+      0/tags: 0#
     oasLiterals:
       0/summary: 0#
       0/description: 0#
@@ -342,25 +360,26 @@ $defs:
         oasReferences:
           0/$ref: RequestBody
       security:
-        oasType: SecurityRequirement
+        oasTypeGroup: SecurityRequirements
         oasChildren:
           0/{index}: securityRequirement
       servers:
-        oasType: Servers
+        oasTypeGroup: Servers
         oasChildren:
           0/{index}: server
       tags:
-        oasType: Tags
+        oasTypeGroup: Tags
         oasImplicitReferences:
           0/{index}:
             oasRelationType: tagRef
             oasTargetType: Tag
             oasTargetField: 0/name
             oasTargetRequired: False
+
   Parameter:
     oasChildren:
       0/schema: 0#
-      0/content/{contentType}: 1#
+      0/content/{contentType}: 1#  # TODO: oasIntermediate?
     oasLiterals:
       0/name: 0#
       0/in: parameterLocation
@@ -408,15 +427,17 @@ $defs:
     oasChildren:
       0/parameters: 0#
       0/servers: 0#
-      # TODO: Some way to insert an operations -> Operations node
-      0/delete: operation
-      0/get: operation
-      0/head: operation
-      0/options: operation
-      0/patch: operation
-      0/post: operation
-      0/put: operation
-      0/trace: operation
+    oasIntermediate:
+      oasTypeGroup: Operations
+      oasChildren:
+        0/delete: operation
+        0/get: operation
+        0/head: operation
+        0/options: operation
+        0/patch: operation
+        0/post: operation
+        0/put: operation
+        0/trace: operation
     oasReferences:
       0/$ref: PathItem
     oasReferenceConflict:
@@ -424,6 +445,7 @@ $defs:
     oasLiterals:
       0/summary: 0#
       0/description: 0#
+    oasExtensible: true
     properties:
       description:
         format: commonmark
@@ -435,7 +457,7 @@ $defs:
           oasReferences:
             0/$ref: Parameter
       servers:
-        oasType: Servers
+        oasTypeGroup: Servers
         oasChildren:
           0/{index}: server
       delete:
@@ -460,6 +482,11 @@ $defs:
     oasChildren:
       0/{pathTemplate}: pathItem
     oasExtensible: true
+    propertyNames:
+      if:
+        pattern: ^/
+      then:
+        oasType: TemplatedUrl
 
   Reference:
     oasType: Reference
@@ -467,7 +494,7 @@ $defs:
   RequestBody:
     oasType: RequestBody
     oasChildren:
-      0/content/{contentType}: content
+      0/content/{contentType}: content  # TODO: oasIntermediate?
     oasLiterals:
       0/description: 0#
       0/required: 0#
@@ -585,7 +612,6 @@ $defs:
 
   SecurityRequirement:
     oasType: SecurityRequirement
-    additionalProperties:
     oasImplicitReferences:
       0/{scheme}#:
         oasRelationType: securitySchemeRef
@@ -638,11 +664,20 @@ $defs:
 
   Tag:
     oasType: Tag
+    oasChildren:
+      0/externaDocs: 0#
+    oasLiterals:
+      0/name: 0#
+      0/description: 0#
+    properties:
+      description:
+        format: commonmark
 
   SecurityScheme:
     oasLiterals:
       0/type: 0#
       0/name: 0#
+      0/scheme: 0#
       0/in: parameteLocation
       0/description: 0#
     oasExtensible: true

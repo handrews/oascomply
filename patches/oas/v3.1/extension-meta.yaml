@@ -66,3 +66,43 @@ oasExamples:
   - 0/example
   - 0/examples/{index}
   - 0/default
+
+properties:
+  description:
+    format: commonmark
+
+  $defs:
+    extensible:
+      oasExtensible: true
+
+    discriminator:
+      oasType: Discriminator
+      oasImplicitReferences:
+        0/propertyName:
+          oasTargetType: Schema
+      properties:
+        mapping:
+          additionalProperties:
+            oasValues:
+              mappingName: '0#'
+              mappingTarget: '0'
+
+    # TODO: Copied from main OAS 3.1 schema - $ref?
+    external-docs:
+      oasType: ExternalDocumentation
+      oasLiterals:
+        0/description: 0#
+      oasDescriptionLinks:
+        0/url: 0#
+      properties:
+        description:
+          format: commonmark
+
+    xml:
+      oasType: Xml
+      oasLiterals:
+        0/name: 0#
+        0/namespace: xmlNamespace
+        0/prefix: xmlPrefix
+        0/attribute: xmlAttribute
+        0/wrapped: 0#
