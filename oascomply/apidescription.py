@@ -691,7 +691,7 @@ class ApiDescription:
             '--number-lines',
             action='store_true',
             help="Enable line and column numbers in the graph and in "
-                 "error reproting; this has a considerable performance "
+                 "error reporting; this has a considerable performance "
                  "impact, especially for YAML",
         )
         parser.add_argument(
