@@ -10,6 +10,7 @@ import logging
 
 import jschon
 import jschon.exc
+from jschon.jsonformat import JSONFormat
 import rdflib
 from rdflib.namespace import RDF, RDFS, XSD
 import toml
@@ -23,7 +24,6 @@ from oascomply.ptrtemplates import (
     RelJsonPtrTemplateError,
 )
 from oascomply.oas3dialect import OAS30_DIALECT_METASCHEMA
-from oascomply.oasjson import OASJSON, OASJSONMixin, OASJSONSchema
 
 __all__ = [
     'OasGraph',
@@ -521,7 +521,7 @@ class OasGraph:
                     self.oas['referenceBase'],
                     rdflib.Literal(
                         rdflib.URIRef(
-                            str(location.instance_uri.to_absolute())
+                            str(location.instance_uri.copy(fragment=None))
                         ),
                         datatype=XSD.anyURI,
                     ),
@@ -535,7 +535,7 @@ class OasGraph:
                 # TODO: elide the reference with a new edge w/correct predicate
 
                 # compare absolute forms
-                if ref_source_uri.to_absolute() != ref_target_uri.to_absolute():
+                if ref_source_uri.copy(fragment=None) != ref_target_uri.copy(fragment=None):
                     # TODO: Schema validation even if local?
                     #       Currently checking with semantic validation
                     logger.debug(
@@ -577,13 +577,12 @@ class OasGraph:
         else:
             schema_data = [parent_obj]
 
-        # TODO: Access OAS dialect metaschema through OASJSON document instance
+        # TODO: Access OAS dialect metaschema through JSONFormat document instance
         m_uri = jschon.URI(OAS30_DIALECT_METASCHEMA)
         for sd in schema_data:
-            assert isinstance(sd, OASJSONMixin)
-            if isinstance(sd, OASJSONSchema):
+            if isinstance(sd, jschon.JSONSchema):
                 schemas.append(sd)
-            elif isinstance(sd, OASJSON):
+            elif isinstance(sd, JSONFormat):
                 logger.error(f'URI AND M_URI: |{type(sd)}| <{sd.document_root.uri}> <{sd.uri}> <{m_uri}>')
                 schemas.append(
                     oascomply.catalog.get_schema(sd.uri, metaschema_uri=m_uri),
@@ -679,7 +678,18 @@ class OasGraph:
         oastype = self._g.value(node, RDF.type, None)
         logger.debug(f'...Initial type: <{oastype}>')
 
+        # TODO: This is due to the change in file:/ normalization because of the
+        #       limitations of jschon.uri.URI using the rfc3986 module.
+        if oastype is None and (u := jschon.URI(str(node))).fragment is None:
+            logger.debug('...search by absolute URI failed, adding empty fragment')
+            oastype = self._g.value(
+                rdflib.URIRef(str(u.copy(fragment=''))),
+                RDF.type,
+                None,
+            )
+
         if oastype == rdflib.URIRef('https://schema.org/DigitalDocument'):
+            logger.debug('...reference targeted entire document')
             root_node = self._g.value(node, self.oas.root, None)
             return self._extract_core_type(root_node)
 
@@ -773,6 +783,7 @@ class OasGraph:
             if context_node:
                 context['node'] = context_node
 
+            logger.debug(f'...reference target node: {target_node}')
             actual = self.oas_v[self._extract_core_type(target_node)]
             expected = self.oas_v[expected]
             if expected != actual:

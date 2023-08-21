@@ -13,6 +13,8 @@ import os
 import sys
 
 import jschon
+from jschon.jsonformat import JSONFormat
+from jschon.vocabulary import Metaschema
 
 import rdflib
 from rdflib.namespace import RDF
@@ -27,7 +29,12 @@ from oascomply.schemaparse import (
 from oascomply.oassource import (
     DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
-from oascomply.oas3dialect import OAS30_DIALECT_METASCHEMA
+from oascomply.oas3dialect import (
+    OAS30_SCHEMA,
+    OAS30_DIALECT_METASCHEMA,
+    OAS31_SCHEMA,
+    OAS31_DIALECT_METASCHEMA,
+)
 import oascomply.resourceid as rid
 
 __all__ = [
@@ -35,6 +42,17 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+class OASJSONFormat(JSONFormat):
+    _default_metadocument_cls = Metaschema
+
+    def __init__(self, *args, catalog='oascomply', **kwargs):
+        self.oasversion = '3.0'
+        self.sourcemap = None
+        self.url = None
+        super().__init__(*args, catalog='oascomply', **kwargs)
+
 
 HELP_PROLOG = """
 Load and validate an API Description/Definition (APID).
@@ -443,7 +461,11 @@ class ApiDescription:
             resource_uri = rid.IriWithJsonPtr(resource_uri)
 
         # TODO: Don't hardcode 3.0
-        resource = oascomply.catalog.get_oas(resource_uri, '3.0')
+        resource = oascomply.catalog.get_resource(
+            resource_uri,
+            metadocument_uri=OAS30_SCHEMA,
+            cls=OASJSONFormat,
+        )
         assert resource is not None
         document = resource.document_root
         sourcemap = resource.sourcemap
@@ -460,7 +482,7 @@ class ApiDescription:
         to_validate = {}
         by_method = defaultdict(list)
         for unit in output['annotations']:
-            ann=Annotation(unit, instance_base=resource_uri.to_absolute())
+            ann=Annotation(unit, instance_base=resource_uri.copy(fragment=None))
             method = f'add_{ann.keyword.lower()}'
 
             # Using a try/except here can result in confusion if something
@@ -795,7 +817,11 @@ class ApiDescription:
 
         # TODO: Temporary hack, search lists properly
         # TODO: Don't hardcode 3.0
-        entry_resource = oascomply.catalog.get_oas(args.files[0].uri, '3.0')
+        entry_resource = oascomply.catalog.get_resource(
+            args.files[0].uri,
+            metadocument_uri=OAS30_SCHEMA,
+            cls=OASJSONFormat,
+        )
         assert entry_resource['openapi'], "First file must contain 'openapi'"
 
         desc = ApiDescription(entry_resource, test_mode=args.test_mode)

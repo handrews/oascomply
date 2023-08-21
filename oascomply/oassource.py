@@ -248,10 +248,13 @@ class OASSource(Source):
         self,
         **kwargs,
     ) -> None:
+        super().__init__(**kwargs)
         self._parser = ContentParser(self.get_loaders())
         self._uri_url_map = {}
         self._uri_sourcemap_map = {}
-        super().__init__(**kwargs)
+
+        # TODO: Not always accurate, but a good initial state?
+        self.set_uri_prefix(None)
 
     @classmethod
     def get_loaders(cls) -> Tuple[ResourceLoader]:
@@ -331,7 +334,7 @@ class MultiSuffixSource(OASSource):
         **kwargs,
     ) -> None:
 
-        self._prefix = self.validate_prefix(prefix)
+        self._prefix = self._validate_prefix(prefix)
         self._suffixes: Sequence[Suffix] = suffixes
         """The suffixes to search, in order."""
 
