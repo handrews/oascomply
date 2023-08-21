@@ -16,6 +16,11 @@ oasLiterals:
   0/jsonSchemaDialect: 0#
 oasExtensible: true
 properties:
+  # Use the more strict version of the base dialect that this package
+  # (oascomply) creates by patching the schemas.  This makes the extension
+  # vocabulary mandatory, and enables the format-assertion vocabulary.
+  jsonSchemaDialect:
+    default: "https://spec.openapis.org/oas/3.1/dialect/strict"
   tags:
     oasTypeGroup: Tags
     oasChildren:

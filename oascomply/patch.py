@@ -2,6 +2,7 @@ import sys
 import argparse
 import json
 import subprocess
+import traceback
 from collections import OrderedDict
 from io import StringIO
 from pathlib import Path
@@ -70,14 +71,15 @@ PATCHES = {
         },
         # META (the vocabulary metaschema) must be patched before DIALECT
         OAS_V31_SCHEMA_OBJ_EXTENSION_META: {
-            'patches': [],
             'patches': [
                 OAS_PATCH_DIR / 'v3.1' / 'extension-meta.yaml',
             ],
             'outfile': PATCHED_OAS31_META_PATH,
         },
         OAS_V31_SCHEMA_OBJ_DEFAULT_DIALECT: {
-            'patches': [],
+            'patches': [
+                OAS_PATCH_DIR / 'v3.1' / 'dialect-meta.yaml',
+            ],
             'outfile': PATCHED_OAS31_DIALECT_PATH,
         },
     },
@@ -174,11 +176,18 @@ def validate_schema(schema_data: Union[Mapping, bool], *metaschema_data: Sequenc
     for md in metaschema_data:
         Metaschema(catalog, md)
 
-    schema = JSONSchema(schema_data, catalog=catalog)
-    result = schema.validate()
+    try:
+        schema = JSONSchema(schema_data, catalog=catalog)
+        result = schema.validate()
 
-    if not result.valid:
-        return result.output(error_format)
+        if not result.valid:
+            return result.output(error_format)
+    except Exception:
+        return {
+            'valid': False,
+            'exception': traceback.format_exc().split('\n'),
+        }
+
     return None
 
 
@@ -288,6 +297,11 @@ def patch():
             print()
     if success:
         print("Done with all schemas!")
+        print()
     else:
-        print("Some patches produced invalid schema(s)!", file=sys.stderr)
-    print()
+        print(
+            "ERROR: Some patches produced invalid schema(s)!\n"
+                "  Check for '.INVALID.json' files for failed schemas.",
+            file=sys.stderr,
+        )
+        print('', file=sys.stderr)
