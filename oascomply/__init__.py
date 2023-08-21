@@ -12,7 +12,7 @@ from oascomply.oascatalog import (
         OASCatalog, initialize_oas_specification_schemas,
 )
 from oascomply.oassource import DirectMapSource
-from oascomply.oas30dialect import initialize_oas30_dialect
+from oascomply.oas3dialect import initialize_oas30_dialect
 from oascomply.patch import (
     PATCHED_OAS30_SCHEMA_DIR,
     PATCHED_OAS31_SCHEMA_PATH,
