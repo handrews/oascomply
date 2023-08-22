@@ -448,7 +448,6 @@ class OASResourceManager:
             metadocument_uri=oas_schema_uri,
             cls=resourceclass,
         )
-        # TODO: self._g.add_resource(oas_doc.url, oas_doc.uri)
         return oas_doc
 
 
@@ -514,6 +513,7 @@ class ApiDescription:
             document.oasversion,
             test_mode=self._test_mode,
         )
+        self._g.add_resource(document.url, document.uri)
 
         self._validated = []
 
@@ -540,6 +540,8 @@ class ApiDescription:
         assert resource is not None
         document = resource.document_root
         sourcemap = resource.sourcemap
+
+        self._g.add_resource(document.url, document.uri)
 
         try:
             output = sp.parse(resource, oastype)
