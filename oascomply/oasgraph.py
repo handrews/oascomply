@@ -301,6 +301,10 @@ class OasGraph:
             )
         return OasGraphResult(errors=[], refTargets=[])
 
+    def add_oastypegroup(self, annotation, document, data, sourcemap):
+        # TODO: Handle separately
+        return self.add_oastype(annotation, document, data, sourcemap)
+
     def add_sourcemap(self, instance_rdf_uri, instance_ptr, sourcemap):
             if len(instance_ptr):
                 map_key = '/' + '/'.join(instance_ptr)

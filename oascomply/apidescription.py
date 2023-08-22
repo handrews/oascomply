@@ -94,6 +94,7 @@ See the README for further information on:
 
 ANNOT_ORDER = (
     'oasType',
+    'oasTypeGroup',
     'oasReferences',
     'oasChildren',
     'oasLiterals',
