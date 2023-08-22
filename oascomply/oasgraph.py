@@ -78,6 +78,8 @@ class OasGraph:
     :param version: The ``X.Y`` OAS version string for the description
     """
     def __init__(self, version: str, *, test_mode=False):
+
+        # TODO: This is better checked elsewhere
         if version not in ('3.0', '3.1'):
             raise ValueError(f'OAS v{version} is not supported.')
         if version == '3.1':
@@ -175,7 +177,6 @@ class OasGraph:
                 retval.append(self._pseudo_qname(obj.datatype))
             return retval
         return self._pseudo_qname(obj)
-
 
     def add_resource(self, url, uri, filename=None):
         rdf_node = rdflib.URIRef(str(uri))

@@ -259,7 +259,7 @@ class OASSource(Source):
     def get_loaders(cls) -> Tuple[ResourceLoader]:
         raise NotImplementedError
 
-    def set_uri_url_map(self, mapping: Mapping[URIString, URIString]):
+    def set_uri_url_map(self, mapping: Mapping[jschon.URI, jschon.URI]):
         self._uri_url_map = mapping
 
     def set_uri_sourcemap_map(self, mapping: Optional[dict]) -> None:
@@ -306,7 +306,7 @@ class OASSource(Source):
 
     def __call__(self, relative_path: str):
         content = self.resolve_resource(relative_path)
-        self.map_url(relative_path, content.url)
+        self.map_url(relative_path, jschon.URI(content.url))
         self.map_sourcemap(relative_path, content.sourcemap)
         return content.value
 
