@@ -1,7 +1,6 @@
 import argparse
 import json
 from pathlib import Path
-from collections import namedtuple
 from typing import (
     Any, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
 )
@@ -56,7 +55,6 @@ See the README for further information on:
 * API description document URLs vs URIs
 * Handling multi-document API descriptions
 * Handling complex referencing scenarios
-* What you need to know about IRIs vs URIs/URLs
 """
 
 ANNOT_ORDER = (
@@ -70,10 +68,6 @@ ANNOT_ORDER = (
     'oasDescriptionLinks',
     'oasExamples',
 )
-
-
-UriPrefix = namedtuple('UriPrefix', ['directory', 'prefix'])
-"""Utility class for option data mapping URI prefixes."""
 
 
 def _add_verbose_option(parser):
@@ -101,8 +95,7 @@ def _add_strip_suffixes_option(parser):
     )
 
 
-# TODO: URI vs IRI confusion... again...
-class ThingToUri:
+class ThingToURI:
     """
     Helper class for mapping URIs to URLs and back.
 
@@ -138,26 +131,27 @@ class ThingToUri:
 
             thing = self._set_thing(values[0])
             if len(values) == 2:
-                iri_str = values[1]
+                uri_str = values[1]
                 logger.debug(
-                    f'Using URI <{iri_str}> from command line for "{thing}"'
+                    f'Using URI <{uri_str}> from command line for "{thing}"'
                 )
             else:
-                iri_str = self.iri_str_from_thing(
-                    self.strip_suffixes(thing),
+                uri_str = self._uri_str_from_thing(
+                    self._strip_suffixes(thing),
                 )
                 logger.debug(
-                    f'Calculated URI <{iri_str}> for "{thing}"'
+                    f'Calculated URI <{uri_str}> for "{thing}"'
                 )
 
-            if uri_is_prefix and not iri_str.endswith('/'):
+            uri_obj = jschon.URI(uri_str)
+            if uri_is_prefix and not uri_obj.path.endswith('/'):
                 raise ValueError(
-                    f"URI prefix <{iri_str}> must have a path ending in '/'",
+                    f"URI prefix <{uri_str}> must have a path ending in '/'",
                 )
 
-            self.set_iri(iri_str)
+            self.set_uri(uri_str)
 
-            if uri_is_prefix and self.uri.query or self.uri.fragment:
+            if uri_is_prefix and uri_obj.query or self.uri.fragment:
                 raise ValueError(
                     f"URI prefix <{self.uri}> may not include "
                     "a query or fragment",
@@ -177,7 +171,10 @@ class ThingToUri:
             raise
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self._values!r})'
+        return (
+            f'{self.__class__.__name__}('
+            f'{self._values!r}, {self._to_strip!r}, {self._uri_is_prefix})'
+        )
 
     @property
     def thing(self):
@@ -186,43 +183,46 @@ class ThingToUri:
 
         See non-public :meth:`_set_thing` for modifications.
         """
-        return self.thing
+        return self._thing
 
     def __str__(self):
         return f'(thing: {self._values[0]}, uri: <{self.uri}>)'
 
-    def strip_suffixes(self, thing: Any) -> str:
+    def _strip_suffixes(self, thing: Any) -> str:
         thing_string = str(thing)
+        from sys import stderr
         for suffix in self._to_strip:
+            print(f'checking {suffix!r}', file=stderr)
             if thing_string.endswith(suffix):
+                print(f'stripping {suffix!r}, len {len(suffix)}', file=stderr)
                 return thing_string[:-len(suffix)]
         return thing_string
 
     def _set_thing(self, thing_str) -> Any:
-        self.thing = thing_str
+        self._thing = thing_str
         return thing_str
 
-    def set_iri(
+    def set_uri(
         self,
-        iri_str: str,
+        uri_str: str,
         attrname: str = 'uri',
     ) -> None:
-        iri = jschon.URI(iri_str)
+        uri = jschon.URI(uri_str)
         try:
-            iri.validate(require_scheme=True)
-            setattr(self, attrname, (iri))
-        except jschon.exc.URIError:
+            uri.validate(require_scheme=True)
+            setattr(self, attrname, (uri))
+        except jschon.exc.URIError as e:
             logger.debug(
-                f'got exception from IriReference({iri_str}):'
-                f'\n\t{e2}'
+                f'got exception from URI ({uri_str}):'
+                f'\n\t{e}'
             )
-            raise ValueError(f'{iri_class.__name__} cannot be relative')
+            raise ValueError(f'{uri_str} cannot be relative')
 
-    def iri_str_from_thing(self, stripped_thing_str: str) -> str:
+    def _uri_str_from_thing(self, stripped_thing_str: str) -> str:
         return stripped_thing_str
 
 
-class PathToUri(ThingToUri):
+class PathToURI(ThingToURI):
     """Local filesystem path to URI utility class."""
 
     def __str__(self):
@@ -237,14 +237,14 @@ class PathToUri(ThingToUri):
             )
         return self.path
 
-    def iri_str_from_thing(self, stripped_thing_str: str) -> str:
+    def _uri_str_from_thing(self, stripped_thing_str: str) -> str:
         # It seems odd to rebuild the path object, but Path.with_suffix('')
         # doesn't care what suffix is removed, so we couldn't use it anyway
         return Path(stripped_thing_str).resolve().as_uri()
 
     @property
     def path(self) -> Path:
-        """Accessor for ``path``, the "thing" of this ThingToUri subclass."""
+        """Accessor for ``path``, the "thing" of this ThingToURI subclass."""
         return self._path
 
     @path.setter
@@ -256,18 +256,18 @@ class PathToUri(ThingToUri):
         return self.path
 
 
-class UrlToUri(ThingToUri):
+class URLToURI(ThingToURI):
     """URL to URI utility class; does not check URL scheme or usability."""
     def __str__(self):
         return f'(url: {self.url}, uri: <{self.uri}>)'
 
     def _set_thing(self, thing_str: str) -> None:
-        self.set_iri(thing_str, attrname='url')
+        self.set_uri(thing_str, attrname='url')
         return self.url
 
     @property
     def url(self) -> jschon.URI:
-        """Accessor for ``url``, the "thing" of this ThingToUri subclass."""
+        """Accessor for ``url``, the "thing" of this ThingToURI subclass."""
         return self._url
 
     @url.setter
@@ -306,11 +306,11 @@ class CustomArgumentParser(argparse.ArgumentParser):
         return self._fix_message(super().format_help())
 
 
-class ActionAppendThingToUri(argparse.Action):
+class ActionAppendThingToURI(argparse.Action):
     @classmethod
     def make_action(
         cls,
-        arg_cls: Type[ThingToUri] = ThingToUri,
+        arg_cls: Type[ThingToURI] = ThingToURI,
         strip_suffixes: Sequence[str] = (),
     ):
         logger.debug(f'Registering {arg_cls.__name__} argument action')
@@ -327,7 +327,7 @@ class ActionAppendThingToUri(argparse.Action):
         dest: str,
         *,
         nargs: Optional[str] = None,
-        arg_cls: Type[ThingToUri],
+        arg_cls: Type[ThingToURI],
         strip_suffixes: Sequence[str],
         **kwargs
     ) -> None:
@@ -345,7 +345,8 @@ class ActionAppendThingToUri(argparse.Action):
             self._arg_cls(values, strip_suffixes=self._strip_suffixes),
         )
 
-def load():
+
+def parse_logging() -> Sequence[str]:
     verbosity_parser = argparse.ArgumentParser(add_help=False)
     _add_verbose_option(verbosity_parser)
     v_args, remaining_args = verbosity_parser.parse_known_args()
@@ -358,6 +359,11 @@ def load():
             oascomply_logger.setLevel(logging.DEBUG)
     else:
         oascomply_logger.setLevel(logging.WARN)
+    return remaining_args
+
+
+def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
+    remaining_args = parse_logging()
 
     strip_suffixes_parser = argparse.ArgumentParser(add_help=False)
     _add_strip_suffixes_option(strip_suffixes_parser)
@@ -389,8 +395,8 @@ def load():
         '-f',
         '--file',
         nargs='+',
-        action=ActionAppendThingToUri.make_action(
-            arg_cls=PathToUri,
+        action=ActionAppendThingToURI.make_action(
+            arg_cls=PathToURI,
             strip_suffixes=ss_args.strip_suffixes,
         ),
         default=[],
@@ -404,8 +410,8 @@ def load():
         '-u',
         '--url',
         nargs='+',
-        action=ActionAppendThingToUri.make_action(
-            arg_cls=UrlToUri,
+        action=ActionAppendThingToURI.make_action(
+            arg_cls=URLToURI,
             strip_suffixes=ss_args.strip_suffixes,
         ),
         default=[],
@@ -421,7 +427,7 @@ def load():
         '-d',
         '--directory',
         nargs='+',
-        action=ActionAppendThingToUri.make_action(arg_cls=PathToUri),
+        action=ActionAppendThingToURI.make_action(arg_cls=PathToURI),
         default=[],
         dest='directories',
         help="Resolve references matching the URI prefix from the given "
@@ -433,7 +439,7 @@ def load():
         '-p',
         '--url-prefix',
         nargs='+',
-        action=ActionAppendThingToUri.make_action(arg_cls=UrlToUri),
+        action=ActionAppendThingToURI.make_action(arg_cls=URLToURI),
         default=[],
         dest='url_prefixes',
         help="Resolve references the URI prefix by replacing it with "
@@ -538,33 +544,45 @@ def load():
         if hasattr(args, attr) and not check(getattr(args, attr)):
             raise NotImplementedError(f'{opt} option not yet implemented!')
 
+    return args
+
+def configure_manager(
+    catalog: jschon.Catalog,
+    *,
+    files: Sequence[PathToURI],
+    urls: Sequence[URLToURI],
+    directories: Sequence[PathToURI],
+    url_prefixes: Sequence[URLToURI],
+    dir_suffixes: Sequence[str],
+    url_suffixes: Sequence[str],
+) -> OASResourceManager:
     manager = OASResourceManager(oascomply.catalog)
 
-    for dir_to_uri in args.directories:
+    for dir_to_uri in directories:
         manager.add_uri_source(
             dir_to_uri.uri,
             FileMultiSuffixSource(
                 str(dir_to_uri.path), # TODO: fix type mismatch
-                suffixes=args.dir_suffixes,
+                suffixes=dir_suffixes,
             )
         )
 
-    for url_to_uri in args.url_prefixes:
+    for url_to_uri in url_prefixes:
         manager.add_uri_source(
             url_to_uri.uri,
             HttpMultiSuffixSource(
                 str(url_to_uri.url), # TODO: fix type mismatch
-                suffixes=args.url_suffixes,
+                suffixes=url_suffixes,
             )
         )
 
     resource_map = {
         f_to_u.uri: f_to_u.path
-        for f_to_u in args.files
+        for f_to_u in files
     }
     resource_map.update({
         u_to_u.uri: u_to_u.path
-        for u_to_u in args.urls
+        for u_to_u in urls
     })
     manager.add_uri_source(
         None,
@@ -572,6 +590,22 @@ def load():
             resource_map,
             suffixes=('.json', '.yaml', '.yml'),
         )
+    )
+
+    return manager
+
+
+def load():
+    remaining_args = parse_logging()
+    args = parse_non_logging(remaining_args)
+    manager = configure_manager(
+        oascomply.catalog,
+        files=args.files,
+        urls=args.urls,
+        directories=args.directories,
+        url_prefixes=args.url_prefixes,
+        dir_suffixes=args.dir_suffixes,
+        url_suffixes=args.url_suffixes,
     )
 
     # TODO: Temporary hack, search lists properly
