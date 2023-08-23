@@ -57,18 +57,6 @@ See the README for further information on:
 * Handling complex referencing scenarios
 """
 
-ANNOT_ORDER = (
-    'oasType',
-    'oasTypeGroup',
-    'oasReferences',
-    'oasChildren',
-    'oasLiterals',
-    'oasExtensible',
-    'oasApiLinks',
-    'oasDescriptionLinks',
-    'oasExamples',
-)
-
 
 def _add_verbose_option(parser):
     parser.add_argument(
