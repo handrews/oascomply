@@ -295,9 +295,6 @@ class CustomArgumentParser(argparse.ArgumentParser):
     def _fix_message(self, message):
         # nargs=+ does not support metavar=tuple
         return message.replace(
-            'INITIAL [INITIAL ...]',
-            'FILE|URL [URI]',
-        ).replace(
             'FILES [FILES ...]',
             'FILE [URI] [TYPE]',
         ).replace(
@@ -404,15 +401,10 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     _add_verbose_option(parser)
     parser.add_argument(
         '-i',
-        '--initial-document',
-        metavar='INITIAL',
-        nargs='+',
-        help="NOT YET IMPLEMENTED!!! "
-            "The document from which to start validating; can "
-            "follow the -f or -u syntax to load the document directly "
-            "and assigne or calculate a URI, or give a path under the "
-            "directory of a -d option or the URL prefix of a -p argument "
-            "to assign a URI based on the -d or -p's URI prefix",
+        '--initial',
+        help="The URI of the document from which to start validating.  "
+             "If not present, the first -f argument is used; if no -f "
+             "arguments are present, the first -u argument is used."
     )
     parser.add_argument(
         '-f',
@@ -547,7 +539,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     # still work as they will be set as a list instead
     # of the default values which are tuples
     for attr, opt, check in (
-        ('initial_document', '-i', lambda arg: True),
+        ('initial', '-i', lambda arg: True),
         ('urls', '-u', lambda arg: True),
         ('url_prefixes', '-p', lambda arg: True),
         ('dir_suffixes', '-D', lambda arg: arg == (
@@ -630,7 +622,11 @@ def load():
 
     # TODO: Temporary hack, search lists properly
     # TODO: Don't hardcode 3.0
-    entry_resource = manager.get_oas(args.files[0].uri, '3.0')
+    logger.debug(f'initial: <{args.initial}>')
+    entry_resource = manager.get_oas(
+        jschon.URI(args.initial) if args.initial else args.files[0].uri,
+        '3.0',
+    )
     assert entry_resource['openapi'], "First file must contain 'openapi'"
 
     desc = ApiDescription(

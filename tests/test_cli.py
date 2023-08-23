@@ -47,6 +47,7 @@ CURRENT_DIR_URL = _normalize_file_url(CURRENT_DIR.as_uri(), append_slash=True)
 
 
 DEFAULT_ARG_NAMESPACE = {
+    'initial': None,
     'files': [],
     'urls': [],
     'strip_suffixes': ('.json', '.yaml', '.yml', ''),
@@ -332,6 +333,14 @@ def test_parse_logging(argv, level, remaining):
                 PathToURI(str(CURRENT_DIR / 'tests')),
             ],
         ),
+    ),
+    (
+        ['-i', str(FOO_URI)],
+        _override_args(initial=str(FOO_URI)),
+    ),
+    (
+        ['--initial', str(OTHER_URI)],
+        _override_args(initial=str(OTHER_URI)),
     ),
 ))
 def test_parse_non_logging(argv, namespace):
