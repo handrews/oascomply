@@ -100,6 +100,7 @@ def test_thing_to_uri(args, thing, uri):
     t = ThingToURI(*args)
     assert t.thing == thing
     assert t.uri == uri
+    assert t.auto_uri == (isinstance(args[0], str) or len(args[0]) == 1)
 
 
 @pytest.mark.parametrize('args,error', (

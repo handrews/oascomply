@@ -114,6 +114,7 @@ class ThingToURI:
             if len(values) not in (1, 2):
                 raise ValueError(f'Expected 1 or 2 values, got {len(values)}')
 
+            self._auto_uri = len(values) == 1
             self._values = values
             self._to_strip = strip_suffixes
             self._uri_is_prefix = uri_is_prefix
@@ -178,6 +179,13 @@ class ThingToURI:
         See non-public :meth:`_set_thing` for modifications.
         """
         return self._thing
+
+    @property
+    def auto_uri(self):
+        """
+        True if this class generated a URI rather than receivingit as a param.
+        """
+        return self._auto_uri
 
     def __str__(self):
         return f'(thing: {self._values[0]}, uri: <{self.uri}>)'
