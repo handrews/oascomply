@@ -117,7 +117,7 @@ OutputStyle: TypeVar = Literal[
 ]
 
 
-class Serializer:
+class OASSerializer:
     def __init__(
         self,
         destination=sys.stdout,
