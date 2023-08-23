@@ -132,7 +132,7 @@ class OASSerializer:
         if self._format and self._format != 'nt11':
             sys.stderr.write('Only "nt11" supported in test mode!\n')
             sys.exit(-1)
-        if destination not in (None, sys.stdout):
+        if self._dest not in (None, sys.stdout):
             sys.stderr.write(
                 'Only in-memory and stdout supported in test mode!\n',
             )
@@ -156,7 +156,7 @@ class OASSerializer:
     def stream_to_std_fd(self, graph, **kwargs) -> None:
         """Serialize directly to stdout/stderr."""
 
-        # rdflib serializers write bytes, not str if destination
+        # rdflib serializers write bytes, not str if self._dest
         # is not None, which doesn't work with sys.stdout / sys.stderr
         self._dest.flush()
         with os.fdopen(
@@ -214,7 +214,7 @@ class OASSerializer:
         }
         new_kwargs.update(kwargs)
         if (
-            output_format not in RDF_OUTPUT_FORMATS_LINE and
+            self._format not in RDF_OUTPUT_FORMATS_LINE and
             base_uri is not None
         ):
             new_kwargs['base'] = base_uri
