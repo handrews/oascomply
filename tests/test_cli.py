@@ -21,6 +21,7 @@ logging.getLogger('oascomply').setLevel(logging.DEBUG)
 BASE_URI = jschon.URI('https://example.com/')
 FOO_YAML_URI = BASE_URI.copy(path='/foo.yaml')
 FOO_URI = BASE_URI.copy(path='/foo')
+DIR_URI = jschon.URI('https://test.com/bar/')
 OTHER_URI = jschon.URI('tag:example.com,2023:bar')
 
 
@@ -135,3 +136,35 @@ def test_prefix_requires_dir(caplog):
         with pytest.raises(ValueError, match=error):
             PathToURI('ldkjfsdfjlsfjdjfsdf', [], True)
     assert error in caplog.text
+
+
+@pytest.mark.parametrize('args,url,uri', (
+    ([str(FOO_YAML_URI), ['.json']], FOO_YAML_URI, FOO_YAML_URI),
+    ([[str(BASE_URI), str(DIR_URI)], [], True], BASE_URI, DIR_URI),
+))
+def test_url_to_uri(args, url, uri):
+    u = URLToURI(*args)
+    assert u.url == url
+    assert u.uri == uri
+    assert u.thing == u.url
+
+
+def test_no_rel_url(caplog):
+    error = 'cannot be relative'
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ValueError, match=error):
+            URLToURI(['foo', 'about:blank'])
+    assert error in caplog.text
+
+
+def test_url_must_be_prefix(caplog):
+    error = "must have a path ending in '/'"
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ValueError, match=error):
+            URLToURI(['about:blank', str(BASE_URI)], [], True)
+    assert error in caplog.text
+
+
+def test_uri_to_uri_str():
+    u = URLToURI([str(FOO_YAML_URI), str(OTHER_URI)])
+    assert str(u) == f'(url: <{FOO_YAML_URI}>, uri: <{OTHER_URI}>)'

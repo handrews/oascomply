@@ -149,7 +149,7 @@ class ThingToURI:
                     f"URI prefix <{uri_str}> must have a path ending in '/'",
                 )
 
-            self.set_uri(uri_str)
+            self._set_uri(uri_str)
 
             if uri_is_prefix and uri_obj.query or self.uri.fragment:
                 raise ValueError(
@@ -202,11 +202,12 @@ class ThingToURI:
         self._thing = thing_str
         return thing_str
 
-    def set_uri(
+    def _set_uri(
         self,
         uri_str: str,
         attrname: str = 'uri',
     ) -> None:
+        logger.debug(f'setting attrbute "{attrname}" to URI <{uri_str}>')
         uri = jschon.URI(uri_str)
         try:
             uri.validate(require_scheme=True)
@@ -268,10 +269,14 @@ class PathToURI(ThingToURI):
 class URLToURI(ThingToURI):
     """URL to URI utility class; does not check URL scheme or usability."""
     def __str__(self):
-        return f'(url: {self.url}, uri: <{self.uri}>)'
+        return f'(url: <{self.url}>, uri: <{self.uri}>)'
 
     def _set_thing(self, thing_str: str) -> None:
-        self.set_uri(thing_str, attrname='url')
+        self._set_uri(thing_str, attrname='url')
+        if self._uri_is_prefix and not self.url.path.endswith('/'):
+            raise ValueError(
+                f"URL prefix <{thing_str}> must have a path ending in '/'",
+            )
         return self.url
 
     @property
