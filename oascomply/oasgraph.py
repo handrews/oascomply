@@ -1,3 +1,4 @@
+import sys
 import json
 import re
 from collections import namedtuple
@@ -16,6 +17,9 @@ from rdflib.namespace import RDF, RDFS, XSD
 import toml
 import dom_toml
 import yaml
+import pygments
+import pygments.lexers
+import pygments.formatters
 
 import oascomply
 from oascomply.ptrtemplates import (
@@ -67,6 +71,26 @@ OUTPUT_FORMATS_STRUCTURED = frozenset({
     'application/trix',         # Trix (RDF/XML for quads)
 })
 
+OUTPUT_FORMAT_LEXER_NAMES = {
+    'toml': 'toml',
+    'ttl': 'turtle',
+    'turtle': 'turtle',
+    'text/turtle': 'turtle',
+    'longturtle': 'turtle',
+    'ttl2': 'turtle',
+    'nt': 'turtle',
+    'nt11': 'turtle',
+    'ntriples': 'turtle',
+    'application/n-triples': 'turtle',
+    'json-ld': 'jsonld',
+    'application/ld+json': 'jsonld',
+    'xml': 'xml',
+    'application/rdf+xml': 'xml',
+    'pretty-xml': 'xml',
+    'trix': 'xml',
+    'application/trix': 'xml',
+}
+
 
 OasGraphResult = namedtuple('Graphresult', ['errors', 'refTargets'])
 Triple = namedtuple('Triple', ['subject', 'predicate', 'object'])
@@ -113,17 +137,33 @@ class OasGraph:
 
     def serialize(self, *args, base=None, output_format=None, **kwargs):
         """Serialize the graph using the given output format."""
+
         if output_format == 'toml':
             return self.to_toml(*args, **kwargs)
         kw = kwargs.copy()
         if output_format not in OUTPUT_FORMATS_LINE and base is not None:
             kw['base'] = base
 
-        return self._g.serialize(
-            *args,
-            format=output_format,
-            **kwargs,
-        )
+        dest = kwargs.get('destination', sys.stdout)
+        if dest.isatty() and (
+            lname := OUTPUT_FORMAT_LEXER_NAMES.get(output_format) is not None
+        ):
+            lexer = pygments.lexers.get_lexer_by_name(lname)
+            formatter = pygments.formatters.Terminal256Formatter(
+                style='paraiso-dark',
+            )
+            del kwargs['destination']
+            destination.write(pygments.highlight(
+                self._g.serialize(*args, format=output_format, **kwargs),
+                lexer=lexer,
+                formatter=formatter,
+            ))
+        else:
+            return self._g.serialize(
+                *args,
+                format=output_format,
+                **kwargs,
+            )
 
     def to_toml(self, *args, destination, order, **kwargs):
         data = {
@@ -153,7 +193,25 @@ class OasGraph:
                 data.setdefault(s_name, {})[p_name] = \
                     self._objects_to_toml(s, p)
 
-        toml.dump(data, destination, dom_toml.TomlEncoder())
+        if destination.isatty():
+            destination.write(pygments.highlight(
+                toml.dumps(data),
+                lexer=pygments.lexers.TOMLLexer(),
+                formatter=pygments.formatters.Terminal256Formatter(
+                    style='paraiso-dark', # purple and blue-green
+                    # style='material',     # mauve and green-yellow
+                    # style='monokai',      # sky blue, yellow, w pink and white
+                    # style='bw',           # uses bold, italics, etc.
+                    # style='rainbow_dash', # blue and kelly green
+                    # style='abap',         # violet and yellow-green
+                    # style='solarized-dark', # olive and teal
+                    # style='sas',          # violet and wine
+                    # style='stata-dark',   # gray and green
+                    # style='zenburn',      # yellow and peach
+                ),
+            ))
+        else:
+            toml.dump(data, destination, dom_toml.TomlEncoder())
 
     def _pseudo_qname(self, term): #, namespaces):
         try:
