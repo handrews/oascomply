@@ -164,6 +164,11 @@ class ThingToURI:
             f'{self._values!r}, {self._to_strip!r}, {self._uri_is_prefix})'
         )
 
+    def __eq__(self, other):
+        if not isinstance(other, ThingToURI):
+            return NotImplemented
+        return self.thing == other.thing and self.uri == other.uri
+
     @property
     def thing(self):
         """

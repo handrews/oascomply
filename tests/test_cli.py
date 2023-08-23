@@ -108,6 +108,27 @@ def test_thing_to_uri_repr(args):
         f'ThingToURI({repr_args[0]}, {repr_args[1]}, {repr_args[2]})'
 
 
+@pytest.mark.parametrize('left,right,equal', (
+    (
+        ThingToURI(['about:blank', str(FOO_URI)]),
+        ThingToURI(['about:blank', str(FOO_URI)]),
+        True,
+    ),
+    (
+        ThingToURI([str(OTHER_URI), str(FOO_URI)]),
+        ThingToURI(['about:blank', str(FOO_URI)]),
+        False,
+    ),
+    (
+        ThingToURI(['about:blank', str(OTHER_URI)]),
+        ThingToURI(['about:blank', str(FOO_URI)]),
+        False,
+    ),
+))
+def test_thing_to_uri_eq(left, right, equal):
+    assert (left == right) is equal
+
+
 @pytest.mark.parametrize('args,path,uri', (
     (['foo.json', ['.yaml']], FOO_JSON_PATH, FOO_JSON_PATH_URL),
     (['foo.json', ['.json']], FOO_JSON_PATH, FOO_PATH_URL),
