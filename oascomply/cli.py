@@ -178,11 +178,8 @@ class ThingToURI:
 
     def _strip_suffixes(self, thing: Any) -> str:
         thing_string = str(thing)
-        from sys import stderr
         for suffix in self._to_strip:
-            print(f'checking {suffix!r}', file=stderr)
             if thing_string.endswith(suffix):
-                print(f'stripping {suffix!r}, len {len(suffix)}', file=stderr)
                 return thing_string[:-len(suffix)]
         return thing_string
 
