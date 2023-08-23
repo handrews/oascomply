@@ -117,6 +117,12 @@ def test_thing_to_uri_errors(args, error, caplog):
     assert error in caplog.text
 
 
+def test_thing_to_uri_set_uri():
+    t = ThingToURI(['about:blank', str(FOO_YAML_URI)])
+    t.set_uri(str(FOO_URI))
+    assert t.uri == FOO_URI
+
+
 @pytest.mark.parametrize('args', (
     ['about:blank'],
     [[str(OTHER_URI), str(BASE_URI)], ['.json'], True],
