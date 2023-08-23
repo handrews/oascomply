@@ -360,7 +360,7 @@ def parse_logging() -> Sequence[str]:
         else:
             oascomply_logger.setLevel(logging.DEBUG)
     else:
-        oascomply_logger.setLevel(logging.WARN)
+        oascomply_logger.setLevel(logging.WARNING)
     return remaining_args
 
 
