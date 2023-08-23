@@ -367,8 +367,6 @@ def parse_logging() -> Sequence[str]:
 
 
 def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
-    remaining_args = parse_logging()
-
     strip_suffixes_parser = argparse.ArgumentParser(add_help=False)
     _add_strip_suffixes_option(strip_suffixes_parser)
     ss_args, remaining_args = strip_suffixes_parser.parse_known_args(
