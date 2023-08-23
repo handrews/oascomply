@@ -1,3 +1,4 @@
+import os
 import sys
 import json
 import re
@@ -13,12 +14,11 @@ import yaml
 import pygments
 import pygments.lexers
 import pygments.formatters
+from rdflib.namespace import RDF, RDFS, XSD
 
 import oascomply
-from oascomply.ptrtemplates import (
-    RelJsonPtrTemplate,
-    RelJsonPtrTemplateError,
-)
+from oascomply.oasgraph import OasGraph
+
 
 __all__ = [
     'OASSerializer',
@@ -160,39 +160,53 @@ class OASSerializer:
         # is not None, which doesn't work with sys.stdout / sys.stderr
         self._dest.flush()
         with os.fdopen(
+            # TODO: should this work for stderr?
             sys.stdout.fileno(),
             "wb",
             closefd=False,  # Don't close stdout/err exiting the with
         ) as dest_fd:
-            graph.serialize(*args, destination=dest_fd, **new_kwargs)
-            dest.flush()
+            graph.serialize(destination=dest_fd, **kwargs)
+            dest_fd.flush()
             return
 
     def colorize(self, data: str) -> None:
-        if (lexer := OUTPUT_FORMAT_LEXERS.get(self._format)) is None:
-            self._dest.write(data)
-            return
+        if (lexer_cls := OUTPUT_FORMAT_LEXERS.get(self._format)) is not None:
 
-        self._dest.write(pygments.highlight(
-            toml.dumps(data),
-            lexer=lexer,
-            formatter=pygments.formatters.Terminal256Formatter(
-                style='paraiso-dark', # purple and blue-green
-                # style='material',     # mauve and green-yellow
-                # style='monokai',      # sky blue, yellow, w pink and white
-                # style='bw',           # uses bold, italics, etc.
-                # style='rainbow_dash', # blue and kelly green
-                # style='abap',         # violet and yellow-green
-                # style='solarized-dark', # olive and teal
-                # style='sas',          # violet and wine
-                # style='stata-dark',   # gray and green
-                # style='zenburn',      # yellow and peach
-            ),
-        ))
+            # self._dest.write(pygments.highlight(
+            data = pygments.highlight(
+                data,
+                lexer=lexer_cls(),
+                formatter=pygments.formatters.Terminal256Formatter(
+                    # style='paraiso-dark', # purple and blue-green
+                    # style='material',     # mauve and green-yellow
+                    # style='monokai',      # sky blue, yellow, w pink and white
+                    # style='bw',           # uses bold, italics, etc.
+                    style='rainbow_dash', # blue and kelly green
+                    # style='abap',         # violet and yellow-green
+                    # style='solarized-dark', # olive and teal
+                    # style='sas',          # violet and wine
+                    # style='stata-dark',   # gray and green
+                    # style='zenburn',      # yellow and peach
+                ),
+            )
+
+        if isinstance(data, bytes):
+            self._dest.flush()
+            with os.fdopen(
+                # TODO: should this work for stderr?
+                sys.stdout.fileno(),
+                "wb",
+                closefd=False,  # Don't close stdout/err exiting the with
+            ) as dest_fd:
+                dest_fd.write(data)
+                dest_fd.flush()
+                return
+
+        self._dest.write(data)
 
     def serialize(
         self,
-        graph: rdflib.Graph,
+        oas_graph: OasGraph,
         *,
         base_uri: str,
         resource_order: Sequence[str],
@@ -212,6 +226,7 @@ class OASSerializer:
             'output_format': self._format,
             'order': resource_order,
         }
+        logger.debug(f'Serializeing to format {self._format!r}')
         new_kwargs.update(kwargs)
         if (
             self._format not in RDF_OUTPUT_FORMATS_LINE and
@@ -219,32 +234,32 @@ class OASSerializer:
         ):
             new_kwargs['base'] = base_uri
 
+        graph = oas_graph.get_rdf_graph()
         if (
             self._dest in (sys.stdout, sys.stderr) and
             not self._dest.isatty() and
             self._format != 'toml'
         ):
-            return self.stream_to_std_fd(graph, **kwargs)
+            return self.stream_to_std_fd(graph, **new_kwargs)
 
         elif self._format == 'toml':
-            return self.to_toml(graph, **kwargs)
+            return self.to_toml(oas_graph, **new_kwargs)
 
         elif self._dest is None:
             return graph.serialize(
-                *args, destination=self._dest, **new_kwargs,
+                destination=self._dest, **new_kwargs,
             )
 
-        elif self._test.isatty():
+        elif self._dest.isatty():
             return self.colorize(graph.serialize(
-                *args, destination=self._dest, **new_kwargs,
+                destination=None, **new_kwargs,
             ))
 
-        graph.serialize(*args, destination=self._dest, **new_kwargs)
+        graph.serialize(destination=self._dest, **new_kwargs)
 
     def to_toml(
         self,
-        graph,
-        *args,      # TODO: ignored?  why is it here?
+        oas_graph: OasGraph,
         **kwargs,   # TODO: ignored?  why is it here?
     ):
         data = {
@@ -253,13 +268,14 @@ class OASSerializer:
                 'rdfs': str(RDFS),
                 'xsd': str(XSD),
                 'schema': 'https://schema.org/',
-                'oas': str(self.oas),
-                f'oas{self._version}': str(self.oas_v),
+                'oas': str(oas_graph.oas),
+                f'oas{oas_graph.oasversion}': str(oas_graph.oas_v),
             },
         }
+        graph = oas_graph.get_rdf_graph()
         nm = graph.namespace_manager
         for s in sorted(graph.subjects(unique=True)):
-            s_name = self._pseudo_qname(s)
+            s_name = self._pseudo_qname(s, graph)
 
             p_set = set(graph.predicates(s, unique=True))
             p_list = []
@@ -270,7 +286,7 @@ class OASSerializer:
             p_list.extend(sorted(p_set))
 
             for p in p_list:
-                p_name = self._pseudo_qname(p)
+                p_name = self._pseudo_qname(p, graph)
                 data.setdefault(s_name, {})[p_name] = \
                     self._objects_to_toml(s, p, graph)
 
@@ -279,7 +295,7 @@ class OASSerializer:
         else:
             toml.dump(data, self._dest, dom_toml.TomlEncoder())
 
-    def _pseudo_qname(self, term): #, namespaces):
+    def _pseudo_qname(self, term, graph): #, namespaces):
         try:
             pn_prefix, _, pn_local = \
                 graph.namespace_manager.compute_qname(term, generate=False)
@@ -298,6 +314,6 @@ class OASSerializer:
         if isinstance(obj, rdflib.Literal):
             retval = [str(obj)]
             if obj.datatype:
-                retval.append(self._pseudo_qname(obj.datatype))
+                retval.append(self._pseudo_qname(obj.datatype, graph))
             return retval
-        return self._pseudo_qname(obj)
+        return self._pseudo_qname(obj, graph)
