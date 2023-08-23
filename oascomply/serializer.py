@@ -181,9 +181,9 @@ class OASSerializer:
                     # style='material',     # mauve and green-yellow
                     # style='monokai',      # sky blue, yellow, w pink and white
                     # style='bw',           # uses bold, italics, etc.
-                    style='rainbow_dash', # blue and kelly green
+                    # style='rainbow_dash', # blue and kelly green
                     # style='abap',         # violet and yellow-green
-                    # style='solarized-dark', # olive and teal
+                    style='solarized-dark', # olive and teal
                     # style='sas',          # violet and wine
                     # style='stata-dark',   # gray and green
                     # style='zenburn',      # yellow and peach
@@ -222,8 +222,7 @@ class OASSerializer:
         # confusingly uses "UTF-8" in the warning message.
         new_kwargs = {
             'encoding': 'utf-8',
-            'base': base_uri,
-            'output_format': self._format,
+            'format': self._format,
             'order': resource_order,
         }
         logger.debug(f'Serializeing to format {self._format!r}')
