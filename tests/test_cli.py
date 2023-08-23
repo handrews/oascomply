@@ -1,3 +1,4 @@
+import sys
 import logging
 from pathlib import Path
 
@@ -168,3 +169,23 @@ def test_url_must_be_prefix(caplog):
 def test_uri_to_uri_str():
     u = URLToURI([str(FOO_YAML_URI), str(OTHER_URI)])
     assert str(u) == f'(url: <{FOO_YAML_URI}>, uri: <{OTHER_URI}>)'
+
+
+@pytest.mark.parametrize('argv,level,remaining', (
+    (['oascomply', '--file'], logging.WARNING, ['--file']),
+    (['oascomply', '-v', '--v1', '--v2'], logging.INFO, ['--v1', '--v2']),
+    (['oascomply', '-vv'], logging.DEBUG, []),
+    (['oascomply', '-v', '-v'], logging.DEBUG, []),
+))
+def test_parse_logging(argv, level, remaining):
+    try:
+        old_argv = sys.argv
+        sys.argv = argv
+
+        remaining_args = parse_logging()
+
+        assert logging.getLogger('oascomply').getEffectiveLevel() == level
+        assert remaining_args == remaining
+
+    finally:
+        sys.argv = old_argv
