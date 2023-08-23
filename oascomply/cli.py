@@ -508,14 +508,6 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
              "Write the output to the given file instead of stdout",
     )
     parser.add_argument(
-        '-t',
-        '--store',
-        default='none',
-        choices=(('none',)),
-        help="NOT YET IMPLEMENTED "
-             "TODO: Support storing to various kinds of databases.",
-    )
-    parser.add_argument(
         '--test-mode',
         action='store_true',
         help="Omit data such as 'locatedAt' that will change for "
@@ -541,7 +533,6 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         )),
         ('url_suffixes', '-P', lambda arg: arg == ()),
         ('output_file', '-O', lambda arg: True),
-        ('store', '-t', lambda arg: True),
     ):
         if hasattr(args, attr) and not check(getattr(args, attr)):
             raise NotImplementedError(f'{opt} option not yet implemented!')
