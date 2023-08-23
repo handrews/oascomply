@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 import jschon
 
@@ -21,6 +22,27 @@ BASE_URI = jschon.URI('https://example.com/')
 FOO_YAML_URI = BASE_URI.copy(path='/foo.yaml')
 FOO_URI = BASE_URI.copy(path='/foo')
 OTHER_URI = jschon.URI('tag:example.com,2023:bar')
+
+
+def _normalize_file_url(url_str: str, append_slash=False) -> str:
+    # URI libraries are inconsistent about this.  oascomply
+    # has settled on file:/ over file:/// due to limitations of
+    # the rfc3986 library used by jschon.uri.URI.
+    u = jschon.URI(url_str).copy(authority=None)
+    return str(
+        u.copy(path=u.path + '/') if append_slash
+        else u
+    )
+
+
+FOO_JSON_PATH = Path('foo.json').resolve()
+FOO_PATH = Path('foo').resolve()
+FOO_JSON_PATH_URL = _normalize_file_url(FOO_JSON_PATH.as_uri())
+FOO_PATH_URL = _normalize_file_url(FOO_PATH.as_uri())
+
+CURRENT_DIR = Path('.').resolve()
+CURRENT_DIR_URL = _normalize_file_url(CURRENT_DIR.as_uri(), append_slash=True)
+
 
 @pytest.mark.parametrize('args,thing,uri', (
     (['about:blank'], 'about:blank', jschon.URI('about:blank')),
@@ -82,3 +104,34 @@ def test_thing_to_uri_repr(args):
     ]
     assert repr(t) == \
         f'ThingToURI({repr_args[0]}, {repr_args[1]}, {repr_args[2]})'
+
+
+@pytest.mark.parametrize('args,path,uri', (
+    (['foo.json', ['.yaml']], FOO_JSON_PATH, FOO_JSON_PATH_URL),
+    (['foo.json', ['.json']], FOO_JSON_PATH, FOO_PATH_URL),
+    (['./', ['.json'], True], CURRENT_DIR, CURRENT_DIR_URL),
+))
+def test_path_to_uri(args, path, uri):
+    p = PathToURI(*args)
+    assert p.path == path
+    assert p.uri == uri
+    assert p.thing == p.path
+
+
+def test_path_to_uri_str():
+    assert (
+        str(PathToURI(
+            [str(FOO_JSON_PATH), str(FOO_PATH_URL)],
+            ['.json'],
+        ))
+        ==
+        f'(path: {FOO_JSON_PATH}, uri: <{FOO_PATH_URL}>)'
+    )
+
+
+def test_prefix_requires_dir(caplog):
+    error = 'must be a directory'
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ValueError, match=error):
+            PathToURI('ldkjfsdfjlsfjdjfsdf', [], True)
+    assert error in caplog.text

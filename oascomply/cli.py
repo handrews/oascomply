@@ -240,7 +240,16 @@ class PathToURI(ThingToURI):
     def _uri_str_from_thing(self, stripped_thing_str: str) -> str:
         # It seems odd to rebuild the path object, but Path.with_suffix('')
         # doesn't care what suffix is removed, so we couldn't use it anyway
-        return Path(stripped_thing_str).resolve().as_uri()
+        # Also, arg parsing code does not need to be blazingly fast.
+        path = Path(stripped_thing_str).resolve()
+
+        # Technically, URI trailing slashes don't mean the same thing as
+        # "directory", but that is the expectation of the dir mapping code.
+        uri = path.as_uri()
+        if path.is_dir() and self._uri_is_prefix and not uri.endswith('/'):
+            uri += '/'
+
+        return uri
 
     @property
     def path(self) -> Path:
