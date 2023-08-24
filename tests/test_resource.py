@@ -200,3 +200,18 @@ def test_update_direct_mapping():
 
     updated_map = {uri1: path3, uri2: path2}
     assert OASResourceManager._direct_sources[cat]._map == updated_map
+
+
+@pytest.mark.parametrize('base,prefix', (
+    (None, ''),
+    (URI('https://example.com/'), 'https://example.com/'),
+))
+def test_add_uri_source(base, prefix):
+    cat = jschon.create_catalog('2020-12')
+    dm = DirectMapSource({})
+    OASResourceManager.add_uri_source(cat, base, dm)
+
+    assert dm._uri_prefix == prefix
+    assert cat._uri_sources[prefix] is dm
+    assert OASResourceManager._url_maps[cat] is dm._uri_url_map
+    assert OASResourceManager._sourcemap_maps[cat] is dm._uri_sourcemap_map

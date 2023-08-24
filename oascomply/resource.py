@@ -315,8 +315,9 @@ class OASResourceManager:
         if isinstance(source, OASSource):
             # This "base URI" is really treated as a prefix, which
             # is why a value of '' works at all.
-            uri_prefix = jschon.URI('') if base_uri is None else base_uri
-            source.set_uri_prefix(uri_prefix)
+            source.set_uri_prefix(
+                jschon.URI('') if base_uri is None else str(base_uri)
+            )
             source.set_uri_url_map(cls._url_maps[catalog])
             source.set_uri_sourcemap_map(cls._sourcemap_maps[catalog])
 
