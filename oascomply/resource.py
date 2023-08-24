@@ -367,7 +367,7 @@ class OASResourceManager:
             for f_to_u in files
         }
         resource_map.update({
-            u_to_u.uri: u_to_u.path
+            u_to_u.uri: u_to_u.url
             for u_to_u in urls
         })
         self.update_direct_mapping(self._catalog, resource_map)

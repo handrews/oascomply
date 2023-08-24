@@ -270,6 +270,26 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    (
+        {
+            'urls': [
+                URLToURI([str(A_URL), str(A_URI)]),
+                URLToURI(str(B_URL), ('.json',)),
+            ],
+        },
+        {
+            '': {
+                'cls': DirectMapSource,
+                'attrs': {
+                    '_map': {
+                        A_URI: A_URL,
+                        # Produces suffixed-sripped B_URL, not B_URI
+                        URI(str(B_URL)[:-len('.json')]): B_URL,
+                    },
+                },
+            },
+        },
+    ),
 ))
 def test_manager_init(kwargs, sources):
     cat = jschon.create_catalog('2020-12')
