@@ -27,6 +27,10 @@ from . import (
     FOO_PATH,
     FOO_JSON_PATH_URL,
     FOO_PATH_URL,
+    BAR_YAML_PATH,
+    BAR_PATH,
+    BAR_YAML_PATH_URL,
+    BAR_PATH_URL,
     CURRENT_DIR,
     CURRENT_DIR_URL,
 )
@@ -215,3 +219,66 @@ def test_add_uri_source(base, prefix):
     assert cat._uri_sources[prefix] is dm
     assert OASResourceManager._url_maps[cat] is dm._uri_url_map
     assert OASResourceManager._sourcemap_maps[cat] is dm._uri_sourcemap_map
+
+
+# Local filesystem paths where the files actually live
+A_PATH = (Path(__file__).parent / 'local-data' / 'a' / 'openapi.yaml').resolve()
+B_PATH = (Path(__file__).parent / 'local-data' / 'b' / 'openapi.json').resolve()
+B_SCHEMA_PATH = (B_PATH.parent / 'schema.json').resolve()
+
+# URL representations of the local filesytem paths
+A_PATH_URL = URI(A_PATH.as_uri())
+B_PATH_URL = URI(B_PATH.as_uri())
+B_SCHEMA_PATH_URL = URI(B_SCHEMA_PATH.as_uri())
+
+# file URIs without the suffix
+A_PATH_URI = URI(A_PATH.with_suffix('').as_uri())
+B_PATH_URI = URI(B_PATH.with_suffix('').as_uri())
+B_SCHEMA_PATH_URI = URI(B_SCHEMA_PATH.with_suffix('').as_uri())
+
+# HTTP URI representations (no suffixes)
+A_URI = URI('https://example.com/apis/a/openapi')
+B_URI = URI('https://example.com/apis/b/openapi')
+B_SCHEMA_URI = URI('https://example.com/apis/b/schema')
+
+# HTTP URL representations (suffixes vary to test with content types)
+A_URL = URI('https://server1.example.com/somewhere/a/openapi')
+A_CONTENT_TYPE = 'application/openapi+yaml'
+B_URL = URI('https://server1.example.com/somwewhere/b/openapi.json')
+B_CONTENT_TYPE = 'application/openapi+json'
+B_SCHEMA_URL = URI('https://server1.example.com/somewehre/b/schema')
+B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
+
+
+@pytest.mark.parametrize('kwargs,sources', (
+    (
+        {
+            'files': [
+                PathToURI(str(FOO_JSON_PATH), ('.json',)),
+                PathToURI([str(BAR_YAML_PATH), str(OTHER_URI)]),
+            ],
+        },
+        {
+            '': {
+                'cls': DirectMapSource,
+                'attrs': {
+                    '_map': {
+                        FOO_PATH_URL: FOO_JSON_PATH,
+                        OTHER_URI: BAR_YAML_PATH,
+                    },
+                },
+            },
+        },
+    ),
+))
+def test_manager_init(kwargs, sources):
+    cat = jschon.create_catalog('2020-12')
+    rm = OASResourceManager(cat, **kwargs)
+    for prefix in sources:
+        assert prefix in cat._uri_sources
+
+        s = cat._uri_sources[prefix]
+        assert isinstance(s, sources[prefix]['cls'])
+
+        for attr, value in sources[prefix]['attrs'].items():
+            assert getattr(s, attr) == value
