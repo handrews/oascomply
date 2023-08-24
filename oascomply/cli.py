@@ -373,12 +373,22 @@ def load():
 
     # TODO: Temporary hack, search lists properly
     # TODO: Don't hardcode 3.0
-    logger.debug(f'initial: <{args.initial}>')
-    entry_resource = manager.get_oas(
-        URI(args.initial) if args.initial else args.files[0].uri,
-        '3.0',
+    entry_resource = manager.get_entry_resource(
+        args.initial,
+        oasversion='3.0',
     )
-    assert entry_resource['openapi'], "First file must contain 'openapi'"
+    if entry_resource is None:
+        sys.stderr.write(
+            'ERROR: '
+            'oascomply requires either -i (--initial-resource) along with '
+            'at least one of -d (--directory) or -p (--url-prefix). OR at '
+            'least one of -f (--file) or -u (--url)\n',
+        )
+        sys.exit(-1)
+
+    if 'openapi' not in entry_resource:
+        sys.stderr.write('ERROR: The initial document must contain "openapi"\n')
+        sys.exit(-1)
 
     desc = ApiDescription(
         entry_resource,

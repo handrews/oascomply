@@ -1,7 +1,9 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Type, Union
+from typing import (
+    Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple, Type, Union,
+)
 
 import jschon
 import jschon.exc
@@ -338,10 +340,13 @@ class OASResourceManager:
         dir_suffixes: Sequence[str] = (),
         url_suffixes: Sequence[str] = (),
     ) -> None:
+
         logger.debug(f"Initializing OASResourceManger for {catalog}")
         self._catalog = catalog
         self._uri_url_map = {}
         self._uri_sourcemap_map = {}
+        self._adjusted_files: Sequence[PathToURI] = []
+        self._adjusted_urls: Sequence[URLToURI] = []
 
         for dir_to_uri in directories:
             logger.debug(
@@ -373,23 +378,57 @@ class OASResourceManager:
 
         resource_map = {}
         for f_to_u in files:
-            f = str(f_to_u.path)
-            if not (
-                f_to_u.auto_uri and
-                list(filter(lambda d: f.startswith(str(d.path)), directories))
-            ):
-                resource_map[f_to_u.uri] = f_to_u.path
+            new_f_to_u, changed = self._match_prefix(
+                f_to_u,
+                directories,
+                dir_suffixes,
+            )
+            if changed:
+                self._adjusted_files.append(new_f_to_u)
+                continue
+
+            resource_map[f_to_u.uri] = f_to_u.path
+            self._adjusted_files.append(f_to_u)
 
         for u_to_u in urls:
-            u = str(u_to_u.url)
-            if not (
-                u_to_u.auto_uri and
-                list(filter(lambda p: u.startswith(str(p.url)), url_prefixes))
-            ):
-                resource_map[u_to_u.uri] = u_to_u.url
+            new_u_to_u, changed = self._match_prefix(
+                u_to_u,
+                url_prefixes,
+                url_suffixes,
+            )
+            if changed:
+                self._adjusted_urls.append(new_u_to_u)
+                continue
+
+            resource_map[u_to_u.uri] = u_to_u.url
+            self._adjusted_urls.append(u_to_u)
 
         if resource_map:
             self.update_direct_mapping(self._catalog, resource_map)
+
+    def _match_prefix(
+        self,
+        a_thing: ThingToURI,
+        prefix_things: Sequence[ThingToURI],
+        suffixes: Sequence[str],
+    ) -> Tuple[ThingToURI, bool]:
+        if a_thing.auto_uri:
+            a_str = str(a_thing.thing)
+            for other_thing in sorted(
+                prefix_things,
+                key=lambda p: str(p.thing),
+                reverse=True, # longest matches first
+            ):
+                other_str = str(other_thing.thing)
+                if a_str.startswith(other_str):
+                    if '.' in a_str and a_str[a_str.rindex('.'):] in suffixes:
+                        a_str = a_str[:a_str.rindex('.')]
+                        a_str = str(other_thing.uri) + a_str[len(other_str):]
+                    return (
+                        type(a_thing)([str(a_thing.thing), a_str], suffixes),
+                        True,
+                    )
+        return (a_thing, False)
 
     def _get_with_url_and_sourcemap(
         self,
@@ -414,6 +453,22 @@ class OASResourceManager:
             r.document_root.source_map = self.get_sourcemap(base_uri)
 
         return r
+
+    def get_entry_resource(
+        self,
+        initial: Optional[Union[URI, str]] = None,
+        *,
+        oasversion: str,
+    ) -> Optional[OASJSONFormat]:
+        uri = None
+        if initial:
+            uri = URI(initial) if isinstance(initial, str) else initial
+        elif self._adjusted_files:
+            uri = self._adjusted_files[0].uri
+        elif self._adjusted_urls:
+            uri = self._adjusted_urls[0].uri
+
+        return None if uri is None else self.get_oas(uri, oasversion)
 
     def get_oas(
         self,
