@@ -14,10 +14,13 @@ from oascomply.resource import (
     PathToURI,
     URLToURI,
 )
-from oascomply.oassource import DirectMapSource
+from oascomply.oassource import (
+    DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
+)
 
 
 from . import (
+    normalize_file_url,
     BASE_URI,
     FOO_YAML_URI,
     FOO_URI,
@@ -222,16 +225,22 @@ def test_add_uri_source(base, prefix):
 
 
 # Local filesystem paths where the files actually live
-A_PATH = (Path(__file__).parent / 'local-data' / 'a' / 'openapi.yaml').resolve()
-B_PATH = (Path(__file__).parent / 'local-data' / 'b' / 'openapi.json').resolve()
+A_DIR = (Path(__file__).parent / 'local-data' / 'a').resolve()
+B_DIR = (Path(__file__).parent / 'local-data' / 'b').resolve()
+A_PATH = (A_DIR / 'openapi.yaml').resolve()
+B_PATH = (B_DIR / 'openapi.json').resolve()
 B_SCHEMA_PATH = (B_PATH.parent / 'schema.json').resolve()
 
 # URL representations of the local filesytem paths
+A_DIR_URL = normalize_file_url(A_DIR.as_uri(), append_slash=True)
+B_DIR_URL = normalize_file_url(B_DIR.as_uri(), append_slash=True)
 A_PATH_URL = URI(A_PATH.as_uri())
 B_PATH_URL = URI(B_PATH.as_uri())
 B_SCHEMA_PATH_URL = URI(B_SCHEMA_PATH.as_uri())
 
 # file URIs without the suffix
+A_DIR_URI = A_DIR_URL
+B_DIR_URI = B_DIR_URL
 A_PATH_URI = URI(A_PATH.with_suffix('').as_uri())
 B_PATH_URI = URI(B_PATH.with_suffix('').as_uri())
 B_SCHEMA_PATH_URI = URI(B_SCHEMA_PATH.with_suffix('').as_uri())
@@ -286,6 +295,55 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
                         # Produces suffixed-sripped B_URL, not B_URI
                         URI(str(B_URL)[:-len('.json')]): B_URL,
                     },
+                },
+            },
+        },
+    ),
+    (
+        {
+            'directories': [
+                PathToURI(str(A_DIR), uri_is_prefix=True),
+                PathToURI([str(B_DIR), str(BASE_URI)], uri_is_prefix=True),
+            ],
+        },
+        {
+            str(A_DIR_URI): {
+                'cls': FileMultiSuffixSource,
+                'attrs': {
+                    '_prefix': f'{A_DIR}/',
+                    '_suffixes': (),
+                },
+            },
+            str(BASE_URI): {
+                'cls': FileMultiSuffixSource,
+                'attrs': {
+                    '_prefix': f'{B_DIR}/',
+                    '_suffixes': (),
+                },
+            },
+        },
+    ),
+    (
+        {
+            'directories': [
+                PathToURI(str(A_DIR), uri_is_prefix=True),
+                PathToURI([str(B_DIR), str(BASE_URI)], uri_is_prefix=True),
+            ],
+            'dir_suffixes': ['.json', '.yaml'],
+        },
+        {
+            str(A_DIR_URI): {
+                'cls': FileMultiSuffixSource,
+                'attrs': {
+                    '_prefix': f'{A_DIR}/',
+                    '_suffixes': ['.json', '.yaml'],
+                },
+            },
+            str(BASE_URI): {
+                'cls': FileMultiSuffixSource,
+                'attrs': {
+                    '_prefix': f'{B_DIR}/',
+                    '_suffixes': ['.json', '.yaml'],
                 },
             },
         },
