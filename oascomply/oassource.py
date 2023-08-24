@@ -267,28 +267,21 @@ class OASSource(Source):
 
     def map_url(
         self,
-        relative_path: URIReferenceString,
+        relative_path: str,
         url: URIString,
     ) -> None:
-        uri = str(self._uri_prefix) + relative_path
+        uri = jschon.URI(str(self._uri_prefix) + relative_path)
         logger.debug(f"Resolved URI <{uri}> via URL <{url}>")
         self._uri_url_map[uri] = url
 
     def map_sourcemap(
         self,
-        relative_path: URIReferenceString,
+        relative_path: str,
         sourcemap: Optional[dict],
     ) -> None:
-        self._uri_sourcemap_map[str(self._uri_prefix) + relative_path] = sourcemap
-
-    def get_url(self, uri: URIString) -> Mapping[URIString, URIString]:
-        return self._uri_url_map
-
-    def get_sourcemap(
-        self,
-        uri: URIString,
-    ) -> Mapping[URIString, Optional[dict]]:
-        return self._uri_sourcemap_map
+        self._uri_sourcemap_map[
+            jschon.URI(str(self._uri_prefix) + relative_path)
+        ] = sourcemap
 
     @property
     def uri_prefix(self) -> URIString:
@@ -300,7 +293,7 @@ class OASSource(Source):
 
     def resolve_resource(
         self,
-        relative_path: URIReferenceString,
+        relative_path: str,
     ) -> ParsedContent:
         raise NotImplementedError
 
@@ -354,7 +347,7 @@ class MultiSuffixSource(OASSource):
 
     def resolve_resource(
         self,
-        relative_path: URIReferenceString,
+        relative_path: str,
     ) -> ParsedContent:
         """
         Appends each suffix in turn, and attempts to load using the map.
@@ -411,18 +404,21 @@ class DirectMapSource(OASSource):
     """Source for loading URIs with known exact locations."""
     def __init__(
         self,
-        location_map: Mapping[URIString, str],
-        *,
-        suffixes=(), # TODO: empty tuple not really right
+        location_map: Mapping[jschon.URI, Union[jshchon.URI, pathlib.Path]],
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self._suffixes = suffixes
         self._map = location_map.copy()
+
+    def update_map(self, mapping):
+        """
+        Update the map as only one no-prefix source can exist per catalog.
+        """
+        self._map.update(mapping)
 
     def resolve_resource(
         self,
-        relative_path: URIReferenceString,
+        relative_path: str,
     ) -> ParsedContent:
         if (location := self._map.get(jschon.URI(relative_path))) is None:
             raise CatalogError(f'Requested unknown resource {relative_path!r}')

@@ -1,6 +1,7 @@
 import logging
+from collections import defaultdict
 from pathlib import Path
-from typing import Any, Optional, Sequence, Type, Union
+from typing import Any, ClassVar, Dict, Mapping, Optional, Sequence, Type, Union
 
 import jschon
 import jschon.exc
@@ -100,7 +101,7 @@ class ThingToURI:
                     "a query or fragment",
                 )
 
-            logger.info(str(self))
+            logger.info(f'Constructed ThingToURI {self})')
 
         except Exception:
             # argparse suppresses any exceptions that are raised, so log them
@@ -263,6 +264,62 @@ class OASResourceManager:
     directly support.  This includes recording the URL from which a resource
     was loaded, as well as other metadata about its stored document form.
     """
+    _direct_sources: ClassVar[
+        Mapping[jschon.Catalog, DirectMapSource]
+    ] = {}
+    _url_maps: ClassVar[
+        Mapping[jschon.Catalog, Mapping]
+    ] = defaultdict(dict)
+    _sourcemap_maps: ClassVar[
+        Mapping[jschon.Catalog, Mapping]
+    ] = defaultdict(dict)
+
+    @classmethod
+    def update_direct_mapping(
+        cls,
+        catalog: jschon.Catalog,
+        mapping: Dict[URI, Union[Path, URI]],
+    ):
+        """
+        Update the one no-prefix direct mapping source for the catalog.
+
+        If no such :class:`DirectMapSource` exists, create one and register
+        it with the catalog.
+
+        Only one source can be (usefully) registered without a prefix, so all
+        no-prefix mappings for a catalog need to go through the same map.
+        """
+        if (dm := cls._direct_sources.get(catalog)) is None:
+            dm = DirectMapSource(mapping)
+            cls.add_uri_source(catalog, None, dm)
+            cls._direct_sources[catalog] = dm
+        else:
+            dm.update_map(mapping)
+
+    @classmethod
+    def add_uri_source(
+        cls,
+        catalog: jschon.Catalog,
+        base_uri: Optional[jschon.URI],
+        source: Source,
+    ) -> None:
+        """
+        Handle :class:`OASSource`-specific regisration aspects.
+
+        This is a classmethod because sometimes a catalog must have
+        sources added prior to knowing everything needed to construct
+        an :class:`OASResourceManager` for it.  An example can be seen in
+        ``oascomply/__init__.py`` by way of :meth:`update_direct_mapping`.
+        """
+        catalog.add_uri_source(base_uri, source)
+        if isinstance(source, OASSource):
+            # This "base URI" is really treated as a prefix, which
+            # is why a value of '' works at all.
+            uri_prefix = jschon.URI('') if base_uri is None else base_uri
+            source.set_uri_prefix(uri_prefix)
+            source.set_uri_url_map(cls._url_maps[catalog])
+            source.set_uri_sourcemap_map(cls._sourcemap_maps[catalog])
+
     def __init__(
         self,
         catalog: jschon.Catalog,
@@ -280,6 +337,7 @@ class OASResourceManager:
 
         for dir_to_uri in directories:
             self.add_uri_source(
+                catalog,
                 dir_to_uri.uri,
                 FileMultiSuffixSource(
                     str(dir_to_uri.path), # TODO: fix type mismatch
@@ -291,7 +349,7 @@ class OASResourceManager:
             self.add_uri_source(
                 url_to_uri.uri,
                 HttpMultiSuffixSource(
-                    str(url_to_uri.url), # TODO: fix type mismatch
+                    str(url_to_uri.url),  # TODO: fix type mismatch
                     suffixes=url_suffixes,
                 )
             )
@@ -304,28 +362,7 @@ class OASResourceManager:
             u_to_u.uri: u_to_u.path
             for u_to_u in urls
         })
-        self.add_uri_source(
-            None,
-            DirectMapSource(
-                resource_map,
-                suffixes=('.json', '.yaml', '.yml'),
-            )
-        )
-
-
-    def add_uri_source(
-        self,
-        base_uri: Optional[jschon.URI],
-        source: Source,
-    ) -> None:
-        self._catalog.add_uri_source(base_uri, source)
-        if isinstance(source, OASSource):
-            # This "base URI" is really treated as a prefix, which
-            # is why a value of '' works at all.
-            uri_prefix = jschon.URI('' if base_uri is None else str(base_uri))
-            source.set_uri_prefix(uri_prefix)
-            source.set_uri_url_map(self._uri_url_map)
-            source.set_uri_sourcemap_map(self._uri_sourcemap_map)
+        self.update_direct_mapping(self._catalog, resource_map)
 
     def _get_with_url_and_sourcemap(
         self,
@@ -344,8 +381,10 @@ class OASResourceManager:
         )
 
         if r.document_root.url is None:
-            r.document_root.url = self._uri_url_map[str(base_uri)]
-            r.document_root.source_map = self._uri_sourcemap_map[str(base_uri)]
+            logger.debug(f'No URL for <{r.document_root.pointer_uri}>')
+            logger.debug(f'URI <{uri}>; BASE URI <{base_uri}>')
+            r.document_root.url = self.get_url(base_uri)
+            r.document_root.source_map = self.get_sourcemap(base_uri)
 
         return r
 
@@ -370,3 +409,22 @@ class OASResourceManager:
             cls=resourceclass,
         )
         return oas_doc
+
+    def get_url(self, uri):
+        try:
+            return self._url_maps[self._catalog][uri]
+        except KeyError:
+            logger.error(
+                f'could not find <{uri}> in {self._url_maps[self._catalog]}',
+            )
+            raise
+
+    def get_sourcemap(self, uri):
+        try:
+            return self._sourcemap_maps[self._catalog][uri]
+        except KeyError:
+            logger.error(
+                f'could not find <{uri}> in '
+                f'{self._sourcemap_maps[self._catalog]}',
+            )
+            raise
