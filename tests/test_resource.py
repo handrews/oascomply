@@ -245,14 +245,20 @@ A_PATH_URI = URI(A_PATH.with_suffix('').as_uri())
 B_PATH_URI = URI(B_PATH.with_suffix('').as_uri())
 B_SCHEMA_PATH_URI = URI(B_SCHEMA_PATH.with_suffix('').as_uri())
 
-# HTTP URI representations (no suffixes)
+# HTTP URI representations (no suffixes, generic domain without host)
+AB_PREFIX_URI = URI('https://example.com/apis/')
+A_PREFIX_URI = URI('https://example.com/apis/a/')
 A_URI = URI('https://example.com/apis/a/openapi')
+B_PREFIX_URI = URI('https://example.com/apis/b/')
 B_URI = URI('https://example.com/apis/b/openapi')
 B_SCHEMA_URI = URI('https://example.com/apis/b/schema')
 
 # HTTP URL representations (suffixes vary to test with content types)
+AB_PREFIX_URL = URI('https://server1.example.com/somewhere/')
+A_PREFIX_URL = URI('https://server1.example.com/somewhere/a/')
 A_URL = URI('https://server1.example.com/somewhere/a/openapi')
 A_CONTENT_TYPE = 'application/openapi+yaml'
+B_PREFIX_URL = URI('https://server1.example.com/somwewhere/b/')
 B_URL = URI('https://server1.example.com/somwewhere/b/openapi.json')
 B_CONTENT_TYPE = 'application/openapi+json'
 B_SCHEMA_URL = URI('https://server1.example.com/somewehre/b/schema')
@@ -343,6 +349,63 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
                 'cls': FileMultiSuffixSource,
                 'attrs': {
                     '_prefix': f'{B_DIR}/',
+                    '_suffixes': ['.json', '.yaml'],
+                },
+            },
+        },
+    ),
+    (
+        {
+            'url_prefixes': [
+                URLToURI(str(A_PREFIX_URL), uri_is_prefix=True),
+                URLToURI(
+                    [str(B_PREFIX_URL), str(BASE_URI)],
+                    uri_is_prefix=True,
+                ),
+            ],
+        },
+        {
+            # Auto-generated URI prefix is just the URL prefix
+            str(A_PREFIX_URL): {
+                'cls': HttpMultiSuffixSource,
+                'attrs': {
+                    '_prefix': str(A_PREFIX_URL),
+                    '_suffixes': (),
+                },
+            },
+            str(BASE_URI): {
+                'cls': HttpMultiSuffixSource,
+                'attrs': {
+                    '_prefix': str(B_PREFIX_URL),
+                    '_suffixes': (),
+                },
+            },
+        },
+    ),
+    (
+        {
+            'url_prefixes': [
+                URLToURI(str(A_PREFIX_URL), uri_is_prefix=True),
+                URLToURI(
+                    [str(B_PREFIX_URL), str(BASE_URI)],
+                    uri_is_prefix=True,
+                ),
+            ],
+            'url_suffixes': ['.json', '.yaml'],
+        },
+        {
+            # Auto-generated URI prefix is just the URL prefix
+            str(A_PREFIX_URL): {
+                'cls': HttpMultiSuffixSource,
+                'attrs': {
+                    '_prefix': str(A_PREFIX_URL),
+                    '_suffixes': ['.json', '.yaml'],
+                },
+            },
+            str(BASE_URI): {
+                'cls': HttpMultiSuffixSource,
+                'attrs': {
+                    '_prefix': str(B_PREFIX_URL),
                     '_suffixes': ['.json', '.yaml'],
                 },
             },
