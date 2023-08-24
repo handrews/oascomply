@@ -344,6 +344,10 @@ class OASResourceManager:
         self._uri_sourcemap_map = {}
 
         for dir_to_uri in directories:
+            logger.debug(
+                f'Mapping URI prefix <{dir_to_uri.uri}> '
+                f'to path "{dir_to_uri.path}"',
+            )
             self.add_uri_source(
                 catalog,
                 dir_to_uri.uri,
@@ -354,6 +358,10 @@ class OASResourceManager:
             )
 
         for url_to_uri in url_prefixes:
+            logger.debug(
+                f'Mapping URI prefix <{url_to_uri.uri}> '
+                f'to URL prefix "{url_to_uri.url}"',
+            )
             self.add_uri_source(
                 url_to_uri.uri,
                 HttpMultiSuffixSource(
@@ -370,7 +378,8 @@ class OASResourceManager:
             u_to_u.uri: u_to_u.url
             for u_to_u in urls
         })
-        self.update_direct_mapping(self._catalog, resource_map)
+        if resource_map:
+            self.update_direct_mapping(self._catalog, resource_map)
 
     def _get_with_url_and_sourcemap(
         self,
