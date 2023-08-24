@@ -433,6 +433,7 @@ class DirectMapSource(OASSource):
                 suffix = loc_str[loc_str.rindex('.'):]
             else:
                 suffix = ''
+        logger.debug(f"Requesting parse('{location}', '{suffix}')")
         return self._parser.parse(location, suffix)
 
     @classmethod

@@ -290,10 +290,16 @@ class OASResourceManager:
         no-prefix mappings for a catalog need to go through the same map.
         """
         if (dm := cls._direct_sources.get(catalog)) is None:
+            logger.debug(
+                f'Initializing direct map source for {catalog} with {mapping}',
+            )
             dm = DirectMapSource(mapping)
             cls.add_uri_source(catalog, None, dm)
             cls._direct_sources[catalog] = dm
         else:
+            logger.debug(
+                f'Updating direct map source for {catalog} with {mapping}',
+            )
             dm.update_map(mapping)
 
     @classmethod
@@ -325,13 +331,14 @@ class OASResourceManager:
         self,
         catalog: jschon.Catalog,
         *,
-        files: Sequence[PathToURI],
-        urls: Sequence[URLToURI],
-        directories: Sequence[PathToURI],
-        url_prefixes: Sequence[URLToURI],
-        dir_suffixes: Sequence[str],
-        url_suffixes: Sequence[str],
+        files: Sequence[PathToURI] = (),
+        urls: Sequence[URLToURI] = (),
+        directories: Sequence[PathToURI] = (),
+        url_prefixes: Sequence[URLToURI] = (),
+        dir_suffixes: Sequence[str] = (),
+        url_suffixes: Sequence[str] = (),
     ) -> None:
+        logger.debug(f"Initializing OASResourceManger for {catalog}")
         self._catalog = catalog
         self._uri_url_map = {}
         self._uri_sourcemap_map = {}
