@@ -28,20 +28,16 @@ Load and validate an API Description/Definition (APID).
 The initial APID document is parsed immediately, with other documents parsed
 as they are referenced.  The initial document is the first of:
 
-1. The document from -i (--initial-document)
+1. The document from -i (--initial-resource), which takes a URI (like "$ref")
 2. The first document from a -f (--file) containing an "openapi" field
 3. The first document from a -u (--url) containing an "openapi" field
-
-All referenced documents MUST be provided in some form on the command line,
-either individually (with -f or -u) or as a document tree to search (with
--d or -p).  Documents are loaded from their URL and referenced by their URI.
 
 Each document's URL is the URL from which it was retrieved. If loaded from
 a local filesystem path, the URL is the corresponding "file:" URL.
 
 A document's URI is either determined from the URL (potentially as modified
 by the -x, -D, and -P options), or set directly on the command line
-(using additional arguments to -i, -f, -u, -d, or -p)..
+(using additional arguments to -f, -u, -d, or -p)..
 This allows reference resolution to work even if the documents are not named
 or deployed in the way the references expect.
 
@@ -60,6 +56,10 @@ See the README for further information on:
 """
 
 
+DEFAULT_SUFFIXES = ('.json', '.yaml', '.yml', '')  # TODO: not sure about ''
+"""Default suffixes stripped from -f paths and -u URLs"""
+
+
 def _add_verbose_option(parser):
     parser.add_argument(
         '-v',
@@ -75,7 +75,7 @@ def _add_strip_suffixes_option(parser):
         '-x',
         '--strip-suffixes',
         nargs='*',
-        default=('.json', '.yaml', '.yml', ''),  # TODO: not sure about ''
+        default=DEFAULT_SUFFIXES,
         help="For documents loaded with -f or -u without an explict URI "
             "assigned on the command line, assign a URI by stripping any "
             "of the given suffixes from the document's URL; passing this "
