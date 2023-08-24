@@ -266,11 +266,19 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
 
 
 @pytest.mark.parametrize('kwargs,sources', (
+    # Just files (-f) and sometimes suffix stripping
     (
         {
             'files': [
+                # -f file -x .json
                 PathToURI(str(FOO_JSON_PATH), ('.json',)),
-                PathToURI([str(BAR_YAML_PATH), str(OTHER_URI)]),
+                # -f file uri
+                PathToURI(
+                    [str(BAR_YAML_PATH), str(OTHER_URI)],
+                    ('.json', '.yaml', '.yml', ''), # defaults
+                ),
+                # -f file -x
+                PathToURI(str(B_SCHEMA_PATH), ()),
             ],
         },
         {
@@ -280,16 +288,25 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
                     '_map': {
                         FOO_PATH_URL: FOO_JSON_PATH,
                         OTHER_URI: BAR_YAML_PATH,
+                        B_SCHEMA_PATH_URL: B_SCHEMA_PATH,
                     },
                 },
             },
         },
     ),
+    # Just URLs (-u) and sometimes suffix stripping
     (
         {
             'urls': [
-                URLToURI([str(A_URL), str(A_URI)]),
+                # -u url uri
+                URLToURI(
+                    [str(A_URL), str(A_URI)],
+                    ('.json', '.yaml', '.yml', ''), # defaults
+                ),
+                # -u url -x json
                 URLToURI(str(B_URL), ('.json',)),
+                # -u url -x
+                URLToURI(str(B_SCHEMA_URL), ()),
             ],
         },
         {
@@ -300,6 +317,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
                         A_URI: A_URL,
                         # Produces suffixed-sripped B_URL, not B_URI
                         URI(str(B_URL)[:-len('.json')]): B_URL,
+                        B_SCHEMA_URL: B_SCHEMA_URL,
                     },
                 },
             },
