@@ -96,26 +96,28 @@ class ContentParser:
     SUPPORTED_SUFFIXES = ('.json', '.yaml', '.yml')
     """Suffixes for which we have parsers, when a media type is unavailable"""
 
+    def __init__(self, loaders: Tuple[ResourceLoader]):
+        self._loaders = loaders
+
     def get_parser(self, content_info):
         """Map of file suffixes and media types to parsing functions."""
         return {
             None: self._unknown_parse,
-            'application/json': self._json_parse,
-            'application/openapi+json': self._json_parse,
-            'application/schema+json': self._json_parse,
-            'application/*+json': self._json_parse,
-            'application/yaml': self._yaml_parse,
-            'application/openapi+yaml': self._yaml_parse,
-            'application/schema+yaml': self._yaml_parse,
-            'application/*+yaml': self._yaml_parse,
+            # TODO: Think deeper about media types and ranges.
+            #       Currently, nothing fetches media types yet anyway.
+            # 'application/json': self._json_parse,
+            # 'application/openapi+json': self._json_parse,
+            # 'application/schema+json': self._json_parse,
+            # 'application/*+json': self._json_parse,
+            # 'application/yaml': self._yaml_parse,
+            # 'application/openapi+yaml': self._yaml_parse,
+            # 'application/schema+yaml': self._yaml_parse,
+            # 'application/*+yaml': self._yaml_parse,
             '': self._unknown_parse,
             '.json': self._json_parse,
             '.yaml': self._yaml_parse,
             '.yml': self._yaml_parse,
         }[content_info]
-
-    def __init__(self, loaders: Tuple[ResourceLoader]):
-        self._loaders = loaders
 
     def parse(
         self,
@@ -423,7 +425,15 @@ class DirectMapSource(OASSource):
         if (location := self._map.get(jschon.URI(relative_path))) is None:
             raise CatalogError(f'Requested unknown resource {relative_path!r}')
 
-        return self._parser.parse(location, location.suffix)
+        try:
+            suffix = location.suffix
+        except AttributeError:
+            loc_str = str(location)
+            if '/' in loc_str and '.' in loc_str[loc_str.rindex('/') + 1:]:
+                suffix = loc_str[loc_str.rindex('.'):]
+            else:
+                suffix = ''
+        return self._parser.parse(location, suffix)
 
     @classmethod
     def get_loaders(self) -> Tuple[ResourceLoader]:
