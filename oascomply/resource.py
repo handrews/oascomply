@@ -363,6 +363,7 @@ class OASResourceManager:
                 f'to URL prefix "{url_to_uri.url}"',
             )
             self.add_uri_source(
+                catalog,
                 url_to_uri.uri,
                 HttpMultiSuffixSource(
                     str(url_to_uri.url),  # TODO: fix type mismatch
