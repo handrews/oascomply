@@ -210,10 +210,13 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         ),
         default=[],
         dest='files',
-        help="An APID document as a local file, optionally followed by "
-             "a URI to use for reference resolution in place of the "
-             "corresponding 'file:' URL; this option can be repeated; "
-             "see also -x",
+        help="An APID document as a local file, optionally followed by a URI "
+             "to use for reference resolution; if no URI is provided but the "
+             "file matches a directory passed with -d, its URI will be "
+             "determined based on the -d URI prefix (and -D if present); "
+             "if no -d matches, the corresponding 'file:' URL for the path "
+             "will be used as the URI; this option can be repeated; "
+             "see also -x, -d, -D",
     )
     parser.add_argument(
         '-u',
@@ -226,9 +229,12 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         default=[],
         dest='urls',
         help="A URL for an APID document, optionally followed by a URI "
-             "to use for reference resolution; by default only 'http:' "
-             "and 'https:' URLs are supported; this option can be "
-             "repeated; see also -x",
+             "to use for reference resolution; if no URI is provided but the "
+             "url matches a prefix passed with -p, its URI will be determined "
+             "based on the -p URI prefix (and -P if present); if no -p "
+             "matches, the URL will also be used as the URI; currently only "
+             "'http:' and 'https:' URLs are supported; this option can be "
+             "repeated; see also -x, -p, -P",
     )
     # Already parsed, but add to include in usage message
     _add_strip_suffixes_option(parser)
