@@ -17,6 +17,7 @@ from oascomply.resource import (
 from oascomply.oassource import (
     DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
+from oascomply.cli import DEFAULT_SUFFIXES
 
 
 from . import (
@@ -267,6 +268,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
 
 @pytest.mark.parametrize('kwargs,sources', (
     # Just files (-f) and sometimes suffix stripping
+    # Note that the actual CLI can't set -x differently per -f
     (
         {
             'files': [
@@ -275,7 +277,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
                 # -f file uri
                 PathToURI(
                     [str(BAR_YAML_PATH), str(OTHER_URI)],
-                    ('.json', '.yaml', '.yml', ''), # defaults
+                    DEFAULT_SUFFIXES,
                 ),
                 # -f file -x
                 PathToURI(str(B_SCHEMA_PATH), ()),
@@ -295,14 +297,12 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
         },
     ),
     # Just URLs (-u) and sometimes suffix stripping
+    # Note that the actual CLI can't set -x differently per -u
     (
         {
             'urls': [
                 # -u url uri
-                URLToURI(
-                    [str(A_URL), str(A_URI)],
-                    ('.json', '.yaml', '.yml', ''), # defaults
-                ),
+                URLToURI([str(A_URL), str(A_URI)], DEFAULT_SUFFIXES),
                 # -u url -x json
                 URLToURI(str(B_URL), ('.json',)),
                 # -u url -x
@@ -323,6 +323,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    # -d only
     (
         {
             'directories': [
@@ -347,6 +348,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    # -d and -D
     (
         {
             'directories': [
@@ -372,6 +374,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    # -p only
     (
         {
             'url_prefixes': [
@@ -400,6 +403,7 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    # -p and -P
     (
         {
             'url_prefixes': [
@@ -429,6 +433,80 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
             },
         },
     ),
+    # everything, everywhere, all at once (files version)
+    (
+        {
+            'directories': [
+                PathToURI([str(A_DIR), str(A_DIR_URI)], uri_is_prefix=True),
+            ],
+            'dir_suffixes': ['.yaml'],
+            'files': [
+                PathToURI(str(A_PATH), ['.json']),
+                PathToURI(
+                    [str(A_PATH.parent / 'x'), str(OTHER_URI)],
+                    ['.json'],
+                ),
+                PathToURI(str(B_PATH), ['.json']),
+            ],
+        },
+        {
+            '': {
+                'cls': DirectMapSource,
+                'attrs': {
+                    '_map': {
+                        OTHER_URI: A_PATH.parent / 'x',
+                        B_PATH_URI: B_PATH,
+                    },
+                },
+            },
+            str(A_DIR_URI): {
+                'cls': FileMultiSuffixSource,
+                'attrs': {
+                    '_prefix': f'{A_DIR}/',
+                    '_suffixes': ['.yaml'],
+                },
+            },
+        }
+    ),
+    # everything, everywhere, all at once (HTTP version)
+    (
+        {
+            'url_prefixes': [
+                URLToURI(
+                    [str(A_PREFIX_URL), str(A_PREFIX_URI)],
+                    uri_is_prefix=True,
+                ),
+            ],
+            'url_suffixes': ['.yaml'],
+            'urls': [
+                URLToURI(str(A_URL), ['.json']),
+                URLToURI(
+                    [str(URI('../x').resolve(A_URL)), str(OTHER_URI)],
+                    ['.json'],
+                ),
+                URLToURI(str(B_URL), ['.json']),
+            ],
+        },
+        {
+            '': {
+                'cls': DirectMapSource,
+                'attrs': {
+                    '_map': {
+                        OTHER_URI: URI('../x').resolve(A_URL),
+                        # Produces suffixed-sripped B_URL, not B_URI
+                        URI(str(B_URL)[:-len('.json')]): B_URL,
+                    },
+                },
+            },
+            str(A_PREFIX_URI): {
+                'cls': HttpMultiSuffixSource,
+                'attrs': {
+                    '_prefix': str(A_PREFIX_URL),
+                    '_suffixes': ['.yaml'],
+                },
+            },
+        }
+    ),
 ))
 def test_manager_init(kwargs, sources):
     cat = jschon.create_catalog('2020-12')
@@ -440,4 +518,4 @@ def test_manager_init(kwargs, sources):
         assert isinstance(s, sources[prefix]['cls'])
 
         for attr, value in sources[prefix]['attrs'].items():
-            assert getattr(s, attr) == value
+            assert getattr(s, attr) == value, f'{type(s).__name__}.{attr}'

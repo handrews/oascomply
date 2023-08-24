@@ -135,7 +135,7 @@ class ThingToURI:
         return self._thing
 
     @property
-    def auto_uri(self):
+    def auto_uri(self) -> bool:
         """
         True if this class generated a URI rather than receivingit as a param.
         """
@@ -371,14 +371,23 @@ class OASResourceManager:
                 )
             )
 
-        resource_map = {
-            f_to_u.uri: f_to_u.path
-            for f_to_u in files
-        }
-        resource_map.update({
-            u_to_u.uri: u_to_u.url
-            for u_to_u in urls
-        })
+        resource_map = {}
+        for f_to_u in files:
+            f = str(f_to_u.path)
+            if not (
+                f_to_u.auto_uri and
+                list(filter(lambda d: f.startswith(str(d.path)), directories))
+            ):
+                resource_map[f_to_u.uri] = f_to_u.path
+
+        for u_to_u in urls:
+            u = str(u_to_u.url)
+            if not (
+                u_to_u.auto_uri and
+                list(filter(lambda p: u.startswith(str(p.url)), url_prefixes))
+            ):
+                resource_map[u_to_u.uri] = u_to_u.url
+
         if resource_map:
             self.update_direct_mapping(self._catalog, resource_map)
 
