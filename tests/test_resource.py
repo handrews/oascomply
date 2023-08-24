@@ -6,13 +6,15 @@ import jschon
 
 import pytest
 
-from oascomply.cli import (
+from oascomply.resource import (
+    OASJSONFormat,
+    OASResourceManager,
+    URI,
     ThingToURI,
     PathToURI,
     URLToURI,
-    parse_logging,
-    parse_non_logging,
 )
+from oascomply.oassource import DirectMapSource
 
 
 from . import (
@@ -176,3 +178,25 @@ def test_url_must_be_prefix(caplog):
         with pytest.raises(ValueError, match=error):
             URLToURI(['about:blank', str(BASE_URI)], [], True)
     assert error in caplog.text
+
+
+def test_update_direct_mapping():
+    cat = jschon.create_catalog('2020-12')
+    uri1 = URI('https://example.com/foo')
+    uri2 = URI('about:blank')
+    path1 = Path('foo.json').resolve()
+    path2 = Path('bar.yaml').resolve()
+    path3 = Path('baz').resolve()
+
+    mapping = {uri1: path1, uri2: path2}
+
+    OASResourceManager.update_direct_mapping(cat, mapping)
+
+    dm = OASResourceManager._direct_sources[cat]
+    assert isinstance(dm, DirectMapSource), type(dm).__name__
+    assert dm._map == mapping
+
+    OASResourceManager.update_direct_mapping(cat, {uri1: path3})
+
+    updated_map = {uri1: path3, uri2: path2}
+    assert OASResourceManager._direct_sources[cat]._map == updated_map
