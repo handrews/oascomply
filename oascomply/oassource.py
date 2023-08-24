@@ -38,6 +38,7 @@ PathString = str
 Suffix = str
 Content = str
 
+
 @dataclass(frozen=True)
 class LoadedContent:
     content: str
@@ -132,7 +133,7 @@ class ContentParser:
         full_path: str,
         create_source_map: bool = False,
     ) -> ParsedContent:
-        """Load a JSON file, optionally with source line and column map."""
+        """Load a JSON document, optionally with source line and column map."""
         sourcemap = None
         loaded = self.load(full_path)
         try:
@@ -156,7 +157,7 @@ class ContentParser:
         full_path: str,
         create_source_map: bool = False,
     ) -> ParsedContent:
-        """Load a YAML file, optionally with source line and column map."""
+        """Load a YAML document, optionally with source line and column map."""
         sourcemap = None
         logger.info(f"Loading {full_path} as YAML...")
         loaded = self.load(full_path)
@@ -215,7 +216,7 @@ class ContentParser:
                 errors.append(e)
 
         if len(errors) == 1:
-            raise errors[e]
+            raise errors[0]
 
         # TODO: This could be better
         raise CatalogError(
@@ -382,6 +383,8 @@ class FileMultiSuffixSource(MultiSuffixSource, FileLoader):
         resource_dir = pathlib.Path(prefix).resolve()
         if not resource_dir.is_dir():
             raise ValueError(f'{prefix!r} must be an existing directory!')
+
+        # Trailing slash required because of blind use as a prefix by jschon
         return f'{resource_dir}/'
 
     @classmethod
