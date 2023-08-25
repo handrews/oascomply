@@ -40,43 +40,6 @@ from . import (
 )
 
 
-def test_update_direct_mapping():
-    cat = jschon.create_catalog('2020-12')
-    uri1 = URI('https://example.com/foo')
-    uri2 = URI('about:blank')
-    path1 = Path('foo.json').resolve()
-    path2 = Path('bar.yaml').resolve()
-    path3 = Path('baz').resolve()
-
-    mapping = {uri1: path1, uri2: path2}
-
-    OASResourceManager.update_direct_mapping(cat, mapping)
-
-    dm = OASResourceManager._direct_sources[cat]
-    assert isinstance(dm, DirectMapSource), type(dm).__name__
-    assert dm._map == mapping
-
-    OASResourceManager.update_direct_mapping(cat, {uri1: path3})
-
-    updated_map = {uri1: path3, uri2: path2}
-    assert OASResourceManager._direct_sources[cat]._map == updated_map
-
-
-@pytest.mark.parametrize('base,prefix', (
-    (None, ''),
-    (URI('https://example.com/'), 'https://example.com/'),
-))
-def test_add_uri_source(base, prefix):
-    cat = jschon.create_catalog('2020-12')
-    dm = DirectMapSource({})
-    OASResourceManager.add_uri_source(cat, base, dm)
-
-    assert dm._uri_prefix == prefix
-    assert cat._uri_sources[prefix] is dm
-    assert OASResourceManager._url_maps[cat] is dm._uri_url_map
-    assert OASResourceManager._sourcemap_maps[cat] is dm._uri_sourcemap_map
-
-
 # Local filesystem paths where the files actually live
 A_DIR = (Path(__file__).parent / 'local-data' / 'a').resolve()
 B_DIR = (Path(__file__).parent / 'local-data' / 'b').resolve()
@@ -116,6 +79,58 @@ B_URL = URI('https://server1.example.com/somwewhere/b/openapi.json')
 B_CONTENT_TYPE = 'application/openapi+json'
 B_SCHEMA_URL = URI('https://server1.example.com/somewehre/b/schema')
 B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
+
+
+@pytest.fixture
+def catalog():
+    return jschon.create_catalog('2020-12', name='test')
+
+
+@pytest.fixture
+def manager(catalog):
+    return OASResourceManager(
+        catalog,
+        directories=[
+            PathToURI([str(A_DIR), str(A_DIR_URI)], uri_is_prefix=True),
+            PathToURI([str(B_DIR), str(B_DIR_URI)], uri_is_prefix=True),
+        ],
+        dir_suffixes=['.json', '.yaml'],
+    )
+
+
+def test_update_direct_mapping(catalog):
+    uri1 = URI('https://example.com/foo')
+    uri2 = URI('about:blank')
+    path1 = Path('foo.json').resolve()
+    path2 = Path('bar.yaml').resolve()
+    path3 = Path('baz').resolve()
+
+    mapping = {uri1: path1, uri2: path2}
+
+    OASResourceManager.update_direct_mapping(catalog, mapping)
+
+    dm = OASResourceManager._direct_sources[catalog]
+    assert isinstance(dm, DirectMapSource), type(dm).__name__
+    assert dm._map == mapping
+
+    OASResourceManager.update_direct_mapping(catalog, {uri1: path3})
+
+    updated_map = {uri1: path3, uri2: path2}
+    assert OASResourceManager._direct_sources[catalog]._map == updated_map
+
+
+@pytest.mark.parametrize('base,prefix', (
+    (None, ''),
+    (URI('https://example.com/'), 'https://example.com/'),
+))
+def test_add_uri_source(base, prefix, catalog):
+    dm = DirectMapSource({})
+    OASResourceManager.add_uri_source(catalog, base, dm)
+
+    assert dm._uri_prefix == prefix
+    assert catalog._uri_sources[prefix] is dm
+    assert OASResourceManager._url_maps[catalog] is dm._uri_url_map
+    assert OASResourceManager._sourcemap_maps[catalog] is dm._uri_sourcemap_map
 
 
 @pytest.mark.parametrize('kwargs,sources', (
@@ -360,13 +375,12 @@ B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
         }
     ),
 ))
-def test_manager_init(kwargs, sources):
-    cat = jschon.create_catalog('2020-12')
-    rm = OASResourceManager(cat, **kwargs)
+def test_manager_init(kwargs, sources, catalog):
+    rm = OASResourceManager(catalog, **kwargs)
     for prefix in sources:
-        assert prefix in cat._uri_sources
+        assert prefix in catalog._uri_sources
 
-        s = cat._uri_sources[prefix]
+        s = catalog._uri_sources[prefix]
         assert isinstance(s, sources[prefix]['cls'])
 
         for attr, value in sources[prefix]['attrs'].items():
