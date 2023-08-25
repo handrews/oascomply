@@ -347,6 +347,7 @@ class OASFormat(OASBaseFormat):
         value,
         *args,
         catalog: Union[str, jschon.Catalog] = 'oascomply',
+        uri: Optional[URI] = None,
         oasversion: Optional[Literal['3.0', '3.1']] = None,
         oastype: OASType = 'OpenAPI',
         oas_document_pointers=(),
@@ -360,6 +361,7 @@ class OASFormat(OASBaseFormat):
             return OASContainer(
                 value,
                 *args,
+                uri=uri,
                 catalog=catalog,
                 oasversion=oasversion,
                 oas_document_pointers=oas_document_pointers,
@@ -370,23 +372,27 @@ class OASFormat(OASBaseFormat):
         if 'openapi' in value:
             if oastype != 'OpenAPI':
                 raise ValueError(
-                    f"OAS type {oastype!r} requested for full OAS document",
+                    f"OAS type {oastype!r} requested for full "
+                    f"OAS document <{uri}>",
                 )
             return OASDocument(
                 value,
                 *args,
+                uri=uri,
                 catalog=catalog,
                 oasversion=oasversion,
                 **kwargs,
             )
         if oastype == 'OpenAPI':
             raise ValueError(
-                f"Full OAS document requested but no 'openapi' field present.",
+                f"Full OAS document requested for <{uri}> but "
+                "no 'openapi' field present.",
             )
                 
         return OASFragment(
             value,
             *args,
+            uri=uri,
             catalog=catalog,
             oasversion=oasversion,
             oastype=oastype,
@@ -451,6 +457,9 @@ class OASFormat(OASBaseFormat):
                 f"No OAS version provided or found for <{uri}>",
             )
 
+        if from_value is not None:
+            from_value = from_value[:from_value.rindex('.')]
+
         if (
             from_params is not None and from_value is not None and
             from_params != from_value
@@ -465,7 +474,7 @@ class OASFormat(OASBaseFormat):
         if from_params:
             self._oasversion = from_params
         else:
-            self._oasversion = from_value[:from_value.rindex('.')]
+            self._oasversion = from_value
 
         if (
             parent is not None and
@@ -917,20 +926,29 @@ class OASResourceManager:
     ) -> Tuple[ThingToURI, bool]:
         if a_thing.auto_uri:
             a_str = str(a_thing.thing)
+
             for other_thing in sorted(
                 prefix_things,
                 key=lambda p: str(p.thing),
                 reverse=True, # longest matches first
             ):
                 other_str = str(other_thing.thing)
+
                 if a_str.startswith(other_str):
                     if '.' in a_str and a_str[a_str.rindex('.'):] in suffixes:
                         a_str = a_str[:a_str.rindex('.')]
-                        a_str = str(other_thing.uri) + a_str[len(other_str):]
+                        a_str = (
+                            str(other_thing.uri) + a_str[len(other_str) + 1:]
+                        )
+
+                    logger.debug(
+                        f'Re-assinging URI <{a_str}> to "{a_thing.thing}"',
+                    )
                     return (
                         type(a_thing)([str(a_thing.thing), a_str], suffixes),
                         True,
                     )
+
         return (a_thing, False)
 
     def _get_with_url_and_sourcemap(
@@ -962,7 +980,7 @@ class OASResourceManager:
         self,
         initial: Optional[Union[URI, str]] = None,
         *,
-        oasversion: str,
+        oasversion: Optional[Literal['3.0', '3.1']] = None,
     ) -> Optional[OASFormat]:
         uri = None
         if initial:
@@ -972,7 +990,7 @@ class OASResourceManager:
         elif self._adjusted_urls:
             uri = self._adjusted_urls[0].uri
 
-        return None if uri is None else self.get_oas(uri, oasversion)
+        return None if uri is None else self.get_oas(uri, oasversion=oasversion)
 
     def get_oas(
         self,

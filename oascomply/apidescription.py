@@ -135,7 +135,7 @@ class ApiDescription:
             resource_uri = URI(str)
 
         # TODO: Don't hardcode 3.0
-        resource = self._manager.get_oas(resource_uri, '3.0')
+        resource = self._manager.get_oas(resource_uri)
         assert resource is not None
         document = resource.document_root
         sourcemap = resource.sourcemap
