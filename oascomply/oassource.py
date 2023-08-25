@@ -352,7 +352,7 @@ class MultiSuffixSource(OASSource):
         no_suffix_path = self.prefix + relative_path
 
         logger.debug(
-            'Checking "{no_suffix_path}" with suffixes {self._suffixes}',
+            f'Checking "{no_suffix_path}" with suffixes {self._suffixes}',
         )
         for suffix in self._suffixes:
             full_path = no_suffix_path + suffix
