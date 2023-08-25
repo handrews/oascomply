@@ -1,6 +1,6 @@
-oascomply.oas30dialect
-======================
-.. automodule:: oascomply.oas30dialect
+oascomply.oas3dialect
+=====================
+.. automodule:: oascomply.oas3dialect
     :members:
     :undoc-members:
     :show-inheritance:
