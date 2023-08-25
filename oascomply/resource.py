@@ -350,14 +350,16 @@ class OASFormat(OASBaseFormat):
         uri: Optional[URI] = None,
         oasversion: Optional[Literal['3.0', '3.1']] = None,
         oastype: OASType = 'OpenAPI',
-        oas_document_pointers=(),
-        oas_fragment_pointers=None,
         **kwargs,
     ) -> OASFormat:
 
-        if oas_document_pointers or oas_fragment_pointers:
-            if oas_fragment_pointers is None:
-                oas_fragment_pointers = {}
+        if uri is not None and uri.fragment and uri.fragment.startswith('/'):
+            pointer = jschon.JSONPointer.parse_uri_fragment(uri.fragment)
+            if oastype == 'OpenAPI':
+                kwargs['oas_document_pointers'] = [pointer]
+            else:
+                kwargs['oas_fragment_pointers'] = {pointer: oastype}
+
             return OASContainer(
                 value,
                 *args,
