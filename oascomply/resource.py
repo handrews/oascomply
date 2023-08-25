@@ -12,6 +12,7 @@ from typing import (
 import jschon
 import jschon.exc
 from jschon.jsonformat import JSONFormat
+from jschon.resource import JSONResource
 from jschon.catalog import Source
 from jschon.vocabulary import Metaschema
 
@@ -31,39 +32,10 @@ from oascomply.oas3dialect import (
     OAS31_SCHEMA_PATH,
 )
 
-# TODO: Sort out vs oascomply.oas3dialect and oascomply.patch
-OAS_SCHEMA_INFO = {
-    '3.0':  {
-        'schema': {
-            'uri': OAS30_SCHEMA,
-            'path': OAS30_SCHEMA_PATH,
-            'vocabs': OAS30_VOCAB_LIST,
-        },
-        'dialect': {
-            # We don't need a path as loading this dialect is managed by
-            # the oascomply.oas3dialect module.
-            'uri': OAS30_DIALECT_METASCHEMA,
-            'vocab-meta': {},
-        },
-    },
-    '3.1': {
-        'schema': {
-            'uri': OAS31_SCHEMA,
-            'path': OAS31_SCHEMA_PATH,
-            'vocabs': OAS31_VOCAB_LIST,
-        },
-        'dialect': {
-            # We don't need a path as loading this dialect is managed by
-            # the oascomply.oas3dialect module.
-            'uri': OAS31_DIALECT_METASCHEMA,
-            'vocab-meta': {},
-        },
-    },
-}
-
 
 __all__ = [
-    'OASBaseFormat',
+    'OASNodeBase',
+    'OASNode',
     'OASContainer',
     'OASDocument',
     'OASFormat',
@@ -124,6 +96,10 @@ URIError: TypeAlias = jschon.exc.URIError
 # TODO: Is this in the right module?
 OASType: TypeAlias = str
 """Alias indicating that the string is an OAS semantic type name."""
+
+
+OASVersion: TypeAlias = Literal['3.0', '3.1']
+"""Alias limiting the OAS version to only supported X.Y version strings."""
 
 
 class ThingToURI:
@@ -333,14 +309,77 @@ class URLToURI(ThingToURI):
         return self.url
 
 
-class OASBaseFormat(JSONFormat):
-    """Base used to unify :class:`OASFormat` and :class:`OASContainer'"""
+class OASNodeBase:
+    """
+    Mixin base interface and implementation across all OAS node types.
 
+    All nodes in an OAS document need to know their :attr:`oasversion`,
+    but otherwise the hierarchy is not unified.
 
-class OASFormat(OASBaseFormat):
-    """Base for all OAS document nodes."""
-    _default_metadocument_cls = Metaschema
+    In the :class:`jschon.json.JSON` hierarchy:
 
+    * :class:`jschon.resource.JSONResource` adds URI identification plus
+      support for referencing other resources and being loaded through
+      a :class:`jschon.catalog.Catalog` instance (which for ``oascomply``
+      is wrapped by :class:`OASResourceManager`); all OAS document nodes
+      should subclass :class:`~jschon.resource.JSONResource`
+    * :class:`jschon.jsonformat.JSONFormat` requires a metadocument
+      against which the format can be validated; only OAS document nodes
+      that know their :class:`OASType`, either implicitly by being
+      a complete document or explicitly due to being referenced in a way
+      that requires a specific :class:`OASType`, can support this
+    * :class:`jschon.jsonschema.JSONSchema`, of course, adds JSON Schema
+      support, which is only relevant to the Schema Object within OAS
+
+    Each of the above classes provides ways to access parent (and in some
+    cases child) nodes that are witihn the same format or resource.  This
+    is critical for OAS 3.1 support, as crossing a format boundary changes
+    the metadocument, while crossing a resource boundary changes the base URI
+    used for referencing, specifically ``"$ref"``, ``"operationRef"``, and
+    the initial resolution of ``"$dynamicRef"``.
+
+    OAS 3.1 Schema Objects that contain the ``"$id"`` keyword are separate
+    *resources*, inside which relative references are resolved against the
+    value of `"$id"` (which is itself resolved against it's parent resource's
+    base URI if necessary).  The ``"$anchor"`` and ``"$dynamicAnchor``
+    keywords create plain-name URI fragments within the resource (not globally).
+
+    OAS 3.x Schema Objects are also a separate *format* from the rest of the
+    OAS document.  In OAS 3.0, this is mostly a philosophical distinction as
+    the Schema Object's metaschema (which is its metadocument) cannot change
+    and is incorporated into the overall OAS schema (which is the OAS format
+    metadocument).  This makes it possible to use the same metadocument for
+    all of an OAS 3.0 document, including the Schema Objects.
+
+    OAS 3.1 Schema Objects are more complex, as their metadocument is
+    determined by the OpenAPI Object's ``jsonSchemaDialect`` field.
+    As they fully support JSON Schema draft 2020-12, Schema Objects with
+    an ``"$id"`` can *also* have ``"$schema"``, which can change the
+    metaschema to something different from what the ``jsonSchemaDialect``
+    defines.
+
+    In the following hierarchy diagram, classes marked with a "*" extend
+    this base as well as the appropriate base from the
+    :class:`~jschon.json.JSON` hierarchy, and can be instantiated by
+    :meth:`oas_factory` through a :class:`OASResourceManager`.
+
+    ::
+
+        jschon.JSON
+        |- jschon.resource.JSONResource
+           |- OASNode*
+           |- OASContainer*
+           |- jschon.jsonformat.JSONFormat
+              |- OASFormat*
+                |- OASDocument
+                |- OASFragment
+              |- jschon.JSONSchema
+                |- OASSchema*
+
+    Treating this class (:class:`OASNodeBase`) as a mixin rather than also
+    extending :class:`~jschon.resource.JSONResource` avoids the confusion
+    common with "diamond-shaped" mutiple inheritance.
+    """
     @classmethod
     def oas_factory(
         cls,
@@ -348,10 +387,10 @@ class OASFormat(OASBaseFormat):
         *args,
         catalog: Union[str, jschon.Catalog] = 'oascomply',
         uri: Optional[URI] = None,
-        oasversion: Optional[Literal['3.0', '3.1']] = None,
+        oasversion: Optional[OASVersion] = None,
         oastype: OASType = 'OpenAPI',
         **kwargs,
-    ) -> OASFormat:
+    ) -> OASNodeBase:
 
         if uri is not None and uri.fragment and uri.fragment.startswith('/'):
             pointer = jschon.JSONPointer.parse_uri_fragment(uri.fragment)
@@ -400,43 +439,6 @@ class OASFormat(OASBaseFormat):
             oastype=oastype,
             **kwargs,
         )
-
-    def __init__(self, *args, uri, catalog='oascomply', **kwargs):
-        try:
-            v = self._oasversion
-        except AttributeError:
-            v = None
-        if v is None:
-            raise TypeError(
-                'OASFormat should only be instantiated through a subclass.'
-            )
-
-        self.sourcemap = None
-        self.url = None
-
-        if 'itemclass' not in kwargs:
-            kwargs['itemclass'] = OASNode
-
-        super().__init__(
-            *args,
-            uri=uri,
-            catalog=catalog,
-            **kwargs)
-
-    def is_format_root(self) -> bool:
-        return self.parent is None or not isinstance(self.parent, OASFormat)
-
-    @cached_property
-    def format_parent(self) -> Optional[OASFormat]:
-        """All OASFormat subclasses are considered the same format."""
-        candidate = None
-        current = self
-
-        while (candidate := current.parent) is not None: 
-            if isinstance(candidate, OASFormat):
-                return candidate
-            current = candidate
-        return candidate
 
     @property
     def oasversion(self):
@@ -491,6 +493,89 @@ class OASFormat(OASBaseFormat):
         if self._oasversion not in OAS_SCHEMA_INFO:
             raise ValueError(f"Unknown OAS version {self.oasversion!r}")
 
+
+class OASNode(JSONResource, OASNodeBase):
+    """Node in an OAS doc that is not aware of its OAS type or metadocument"""
+    def __init__(
+        self,
+        *args,
+        oasversion: Optional[str] = None,
+        uri: Optional[URI] = None,
+        parent: Optional[jschon.JSON] = None,
+        catalog: Union[str, jschon.Catalog] = 'oascomply',
+        **kwargs,
+    ):
+        if parent is None:
+            raise ValueError(
+                "Class OASNode cannot be a document root (without a parent)",
+            )
+
+        # TODO: refactor some of this duplication
+        self._set_oasversion(
+            uri=uri,
+            parent=parent,
+            from_params=oasversion,
+        )
+
+        super().__init__(
+            *args,
+            uri=uri,
+            parent=parent,
+            catalog=catalog,
+            oasversion=self.oasversion,
+            **kwargs,
+        )
+
+
+class OASFormat(JSONFormat, OASNodeBase):
+    """Base for all OAS document nodes."""
+    _default_metadocument_cls = Metaschema
+
+    def __init__(self, *args, uri, catalog='oascomply', **kwargs):
+        try:
+            v = self._oasversion
+        except AttributeError:
+            v = None
+        if v is None:
+            raise TypeError(
+                'OASFormat should only be instantiated through a subclass.'
+            )
+        logger.info(f'Creating new {type(self).__name__}...')
+        logger.info(f'...provided node uri <{kwargs.get("uri")}>')
+        logger.info(f'...provided meta uri <{kwargs.get("metadocument_uri")}>')
+
+        self.sourcemap = None
+        self.url = None
+
+        if 'itemclass' not in kwargs:
+            kwargs['itemclass'] = OASNode
+
+        super().__init__(
+            *args,
+            uri=uri,
+            catalog=catalog,
+            **kwargs)
+
+        logger.info(
+            f'New {type(self).__name__} created: <{self.pointer_uri}>...',
+        )
+        logger.info(f'...metadocument <{self.metadocument_uri}>')
+
+    def is_format_root(self) -> bool:
+        return self.parent is None or not isinstance(self.parent, OASFormat)
+
+    @cached_property
+    def format_parent(self) -> Optional[OASFormat]:
+        """All OASFormat subclasses are considered the same format."""
+        candidate = None
+        current = self
+
+        while (candidate := current.parent) is not None: 
+            if isinstance(candidate, OASFormat):
+                return candidate
+            current = candidate
+        return candidate
+
     # TODO: Should only OASDocument have this?
     #       If so, where does OASFragment's schema fragment go?
     def _get_oas_schema_uri(
@@ -502,6 +587,12 @@ class OASFormat(OASBaseFormat):
     ):
         from_oasversion = URI(
             OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
+        )
+        logger.debug(
+            f'OAS metadocument candidates for <{uri}>\n'
+            f'\tfrom params:     <{from_params}>\n'
+            f'\tfrom oastype:    <{from_oastype}>\n'
+            f'\tfrom oasversion: <{from_oasversion}>',
         )
         if (from_params, from_oastype) == (None, None):
             return from_oasversion
@@ -580,43 +671,6 @@ class OASDocument(OASFormat):
         )
 
 
-class OASNode(OASFormat):
-    def __init__(
-        self,
-        *args,
-        oasversion: Optional[str] = None,
-        uri: Optional[URI] = None,
-        parent: Optional[jschon.JSON] = None,
-        metadocument_uri: Optional[URI] = None,
-        **kwargs,
-    ):
-        if parent is None:
-            raise ValueError(
-                "Class OASNode cannot be a document root (without a parent)",
-            )
-
-        # TODO: refactor some of this duplication
-        self._set_oasversion(
-            uri=uri,
-            parent=parent,
-            from_params=oasversion,
-        )
-
-        metadocument_uri = self._get_oas_schema_uri(
-            uri=uri,
-            from_params=metadocument_uri,
-        )
-
-        super().__init__(
-            *args,
-            uri=uri,
-            parent=parent,
-            metadocument_uri=metadocument_uri,
-            oasversion=self.oasversion,
-            **kwargs,
-        )
-
-
 class OASFragment(OASFormat):
     def __init__(
         self,
@@ -643,14 +697,16 @@ class OASFragment(OASFormat):
             OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
         )
         if self.oasversion == '3.0':
-            from_oastype = oas_schema_uri.copy(fragment=oastype)
+            from_oastype = oas_schema_uri.copy(fragment=f'/$defs/{oastype}')
         elif self.oasversion == '3.1':
             kebab_name = []
             for char in oastype:
                 if char.isupper() and kebab_name:
                     kebab_name.append('-')
                 kebab_name.append(char.lower())
-            from_oastype = oas_schema_uri.copy(fragment=''.join(kebab_name))
+            from_oastype = oas_schema_uri.copy(
+                fragment=f'/$defs/{"".join(kebab_name)}',
+            )
 
         metadocument_uri = self._get_oas_schema_uri(
             uri=uri,
@@ -668,7 +724,7 @@ class OASFragment(OASFormat):
         )
 
 
-class OASContainer(OASBaseFormat):
+class OASContainer(JSONResource, OASNodeBase):
     """Non-OAS document node with at least one OASFormat descendant"""
     def __init__(
         self,
@@ -963,8 +1019,8 @@ class OASResourceManager:
         r = self._catalog.get_resource(
             uri,
             cacheid=oasversion,
-            cls=OASBaseFormat,
-            factory=lambda *args, **kwargs: OASFormat.oas_factory(
+            cls=OASNodeBase,
+            factory=lambda *args, **kwargs: OASNodeBase.oas_factory(
                 *args, oastype=oastype, oasversion=oasversion, **kwargs
             ),
         )
@@ -981,7 +1037,7 @@ class OASResourceManager:
         self,
         initial: Optional[Union[URI, str]] = None,
         *,
-        oasversion: Optional[Literal['3.0', '3.1']] = None,
+        oasversion: Optional[OASVersion] = None,
     ) -> Optional[OASFormat]:
         uri = None
         if initial:

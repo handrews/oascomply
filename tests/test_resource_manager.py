@@ -7,7 +7,8 @@ import jschon
 import pytest
 
 from oascomply.resource import (
-    OASBaseFormat,
+    OASNodeBase,
+    OASNode,
     OASContainer,
     OASDocument,
     OASFormat,
@@ -17,6 +18,7 @@ from oascomply.resource import (
     ThingToURI,
     PathToURI,
     URLToURI,
+    OAS_SCHEMA_INFO,
 )
 from oascomply.oassource import (
     DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
@@ -50,6 +52,7 @@ B_DIR = (Path(__file__).parent / 'local-data' / 'b').resolve()
 A_PATH = (A_DIR / 'openapi.yaml').resolve()
 B_PATH = (B_DIR / 'openapi.json').resolve()
 B_SCHEMA_PATH = (B_PATH.parent / 'schema.json').resolve()
+A_JUNK_PATH = (A_DIR / 'junk.yaml').resolve()
 
 # URL representations of the local filesytem paths
 A_DIR_URL = normalize_file_url(A_DIR.as_uri(), append_slash=True)
@@ -57,6 +60,7 @@ B_DIR_URL = normalize_file_url(B_DIR.as_uri(), append_slash=True)
 A_PATH_URL = URI(A_PATH.as_uri())
 B_PATH_URL = URI(B_PATH.as_uri())
 B_SCHEMA_PATH_URL = URI(B_SCHEMA_PATH.as_uri())
+A_JUNK_PATH_URL = URI(A_JUNK_PATH.as_uri())
 
 # file URIs without the suffix
 A_DIR_URI = A_DIR_URL
@@ -64,6 +68,7 @@ B_DIR_URI = B_DIR_URL
 A_PATH_URI = URI(A_PATH.with_suffix('').as_uri())
 B_PATH_URI = URI(B_PATH.with_suffix('').as_uri())
 B_SCHEMA_PATH_URI = URI(B_SCHEMA_PATH.with_suffix('').as_uri())
+A_JUNK_PATH_URI = URI(A_JUNK_PATH.with_suffix('').as_uri())
 
 # HTTP URI representations (no suffixes, generic domain without host)
 AB_PREFIX_URI = URI('https://example.com/apis/')
@@ -72,6 +77,7 @@ A_URI = URI('https://example.com/apis/a/openapi')
 B_PREFIX_URI = URI('https://example.com/apis/b/')
 B_URI = URI('https://example.com/apis/b/openapi')
 B_SCHEMA_URI = URI('https://example.com/apis/b/schema')
+A_JUNK_URI = URI('https://example.com/apis/a/junk')
 
 # HTTP URL representations (suffixes vary to test with content types)
 AB_PREFIX_URL = URI('https://server1.example.com/somewhere/')
@@ -81,9 +87,10 @@ A_CONTENT_TYPE = 'application/openapi+yaml'
 B_PREFIX_URL = URI('https://server1.example.com/somwewhere/b/')
 B_URL = URI('https://server1.example.com/somwewhere/b/openapi.json')
 B_CONTENT_TYPE = 'application/openapi+json'
-B_SCHEMA_URL = URI('https://server1.example.com/somewehre/b/schema')
+B_SCHEMA_URL = URI('https://server1.example.com/somewhere/b/schema')
 B_SCHEMA_CONTENT_TYPE = 'application/schema+json'
-
+A_JUNK_URL = URI('https://sever1.example.com/somewhere/a/junk')
+A_JUNK_CONTENT_TYPE = 'application/yaml'
 
 @pytest.fixture
 def catalog():
@@ -398,3 +405,33 @@ def test_resource_loading(manager):
     assert apid.url == A_PATH_URL
     assert apid.sourcemap is None
     assert apid['x-id'] == str(A_URI)
+
+    assert apid.is_format_root()
+    assert apid.format_root is apid
+    assert apid.format_parent is None
+    assert apid.parent_in_format is None
+
+    assert apid.is_resource_root()
+    assert apid.resource_root is apid
+    assert apid.resource_parent is None
+    assert apid.parent_in_resource is None
+
+    assert apid.document_root is apid
+
+    for key in apid:
+        assert isinstance(apid[key], OASNode), "key '{key}'"
+        assert apid[key].is_resource_root() is False
+        assert apid[key].resource_root is apid
+        assert apid[key].resource_parent == apid[key].parent
+        assert apid[key].parent_in_resource == apid[key].parent
+        assert apid[key].document_root is apid
+        assert apid[key].pointer_uri == apid.uri.copy(fragment=f'/{key}')
+        if key == 'info':
+            for ikey in apid[key]:
+                assert isinstance(apid[key][ikey], OASNode), "key '{key}'"
+
+
+def test_oas_container(manager):
+    p = manager.get_oas(A_JUNK_URI, oasversion='3.0', oastype='PathItem')
+    assert isinstance(p, OASFragment)
+    assert p.oasversion == '3.0'

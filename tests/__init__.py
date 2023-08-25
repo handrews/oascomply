@@ -4,7 +4,7 @@ from pathlib import Path
 import jschon
 
 
-logging.getLogger('oascomply').setLevel(logging.DEBUG)
+logging.getLogger('oascomply').setLevel(logging.INFO)
 
 
 BASE_URI = jschon.URI('https://example.com/')
