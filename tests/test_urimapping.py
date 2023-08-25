@@ -6,7 +6,7 @@ import jschon
 
 import pytest
 
-from oascomply.resource import (
+from oascomply.urimapping import (
     URI,
     ThingToURI,
     PathToURI,
