@@ -515,7 +515,7 @@ class OASFormat(OASBaseFormat):
             if from_oasversion.fragment:
                 with_fragment.add(from_oasversion)
 
-        if len(bases) > 1 or len(maybe_fragments) > 1:
+        if len(bases) > 1 or len(with_fragment) > 1:
             raise ValueError(
                 f"Conflicting metadocument URIs for <{uri}>:\n"
                 f"\tfrom oasversion: <{from_oasversion}>\n"
@@ -657,7 +657,6 @@ class OASFragment(OASFormat):
         )
 
         super().__init__(
-            value,
             *args,
             uri=uri,
             parent=parent,
