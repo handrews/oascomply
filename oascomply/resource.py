@@ -453,6 +453,116 @@ class OASFormat(JSONFormat, OASNodeBase):
         return selected.copy()
 
 
+class SchemaFinder:
+    @classmethod
+    def check_for_schema(cls, oastype):
+        return cls._LOCATIONS[oastype]
+
+    _LOCATIONS: ClassVar[
+        Dict[
+            OASType,
+            Dict[
+                str,
+                 Union[Dict, Callable, bool]
+            ]
+        ]
+    ] = defaultdict(bool, {
+        'OpenAPI': defaultdict(bool, {
+            'paths': 'Paths',
+            'components': 'Components',
+            # TODO: 3.1 only
+            'webhooks': defaultdict(bool, {
+                r'.*': 'PathItem',
+            }),
+        }),
+        'Components': defaultdict(bool, {
+            'schemas': defaultdict(bool, {
+                r'.*': True,
+            }),
+            'responses': defaultdict(bool, {
+                r'.*': 'Response',
+            }),
+            'parameters': defaultdict(bool, {
+                r'.*': 'Parameter',
+            }),
+            'requestBodies': defaultdict(bool, {
+                r'.*': 'RequestBody',
+            }),
+            'headers': defaultdict(bool, {
+                r'.*': 'Header',
+            }),
+            'callbacks': defaultdict(bool, {
+                r'.*': 'Callback',
+            }),
+            # TODO: 3.1 only
+            'pathItems': defaultdict(bool, {
+                r'.*': 'PathItem',
+            }),
+        }),
+        'Paths': defaultdict(bool, {
+            r'^/.*$': 'PathItem',
+        }),
+        'PathItem': defaultdict(bool, {
+            'parameters': defaultdict(bool, {
+                r'0-9+': 'Parameter',
+            }),
+            r'(get)|(put)|(post)|(delete)|(options)|(head)|(patch)|(trace)':
+                'Operation',
+        }),
+        'Operation': defaultdict(bool, {
+            'parameters': defaultdict(bool, {
+                r'0-9+': 'Parameter',
+            }),
+            'requestBody': 'RequestBody',
+            'responses': defaultdict(bool, {
+                r'(default)|([1-5][X0-9][X0-9])':
+                    'Response',
+            }),
+            'callbacks': defaultdict(bool, {
+                r'.*': 'Callback',
+            }),
+        }),
+        'Parameter': defaultdict(bool, {
+            'schema': True,
+            'content': defaultdict(bool, {
+                r'.*': 'MediaType',
+            }),
+        }),
+        'Parameter': defaultdict(bool, {
+            'schema': True,
+            # Unclear if 'content' is relevant to headers, but doesn't hurt
+            'content': defaultdict(bool, {
+                r'.*': 'MediaType',
+            }),
+        }),
+        'RequestBody': defaultdict(bool, {
+            'content': defaultdict(bool, {
+                r'.*': 'MedaiType',
+            }),
+        }),
+        'Response': defaultdict(bool, {
+            'headers': defaultdict(bool, {
+                r'.*': 'Header',
+            }),
+            'content': defaultdict(bool, {
+                r'.*': 'MediaType',
+            }),
+        }),
+        'MediaType': defaultdict(bool, {
+            'schema': True,
+            'encoding': defaultdict(bool, {
+                'headers': defaultdict(bool, {
+                    r'.*': 'Header',
+                }),
+            }),
+        }),
+        'Callback': defaultdict(bool, {
+            # Runtime expressions start with "$", extensions start with "x-"
+            r'\$.*': 'PathItem',
+        }),
+    })
+
+
 class OASDocument(OASFormat):
     """
     A class for the root node of a proper OAS document.
