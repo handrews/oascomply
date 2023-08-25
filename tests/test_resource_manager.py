@@ -7,7 +7,11 @@ import jschon
 import pytest
 
 from oascomply.resource import (
-    OASJSONFormat,
+    OASBaseFormat,
+    OASContainer,
+    OASDocument,
+    OASFormat,
+    OASFragment,
     OASResourceManager,
     URI,
     ThingToURI,
@@ -91,8 +95,8 @@ def manager(catalog):
     return OASResourceManager(
         catalog,
         directories=[
-            PathToURI([str(A_DIR), str(A_DIR_URI)], uri_is_prefix=True),
-            PathToURI([str(B_DIR), str(B_DIR_URI)], uri_is_prefix=True),
+            PathToURI([str(A_DIR), str(A_PREFIX_URI)], uri_is_prefix=True),
+            PathToURI([str(B_DIR), str(B_PREFIX_URI)], uri_is_prefix=True),
         ],
         dir_suffixes=['.json', '.yaml'],
     )
@@ -385,3 +389,12 @@ def test_manager_init(kwargs, sources, catalog):
 
         for attr, value in sources[prefix]['attrs'].items():
             assert getattr(s, attr) == value, f'{type(s).__name__}.{attr}'
+
+
+def test_resource_loading(manager):
+    apid = manager.get_oas(A_URI)
+    assert isinstance(apid, OASDocument)
+    assert apid.oasversion == '3.0'
+    assert apid.url == A_PATH_URL
+    assert apid.sourcemap is None
+    assert apid['x-id'] == str(A_URI)

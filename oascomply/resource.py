@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import logging
 from collections import defaultdict
+from functools import cached_property
 from pathlib import Path
 from typing import (
-    Any, ClassVar, Dict, Mapping, Optional, Sequence, Tuple, Type, Union,
+    Any, ClassVar, Dict, Literal, Mapping, Optional,
+    Sequence, Tuple, Type, Union,
 )
 
 import jschon
@@ -15,29 +19,111 @@ import oascomply
 from oascomply.oassource import (
     OASSource, DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
-from oascomply.oas3dialect import OAS30_SCHEMA, OAS31_SCHEMA
+from oascomply.oas3dialect import (
+    OAS30_DIALECT_METASCHEMA,
+    OAS30_VOCAB_LIST,
+    OAS30_SUBSET_VOCAB,
+    OAS30_SCHEMA,
+    OAS30_SCHEMA_PATH,
+    OAS31_DIALECT_METASCHEMA,
+    OAS31_VOCAB_LIST,
+    OAS31_SCHEMA,
+    OAS31_SCHEMA_PATH,
+)
+
+# TODO: Sort out vs oascomply.oas3dialect and oascomply.patch
+OAS_SCHEMA_INFO = {
+    '3.0':  {
+        'schema': {
+            'uri': OAS30_SCHEMA,
+            'path': OAS30_SCHEMA_PATH,
+            'vocabs': OAS30_VOCAB_LIST,
+        },
+        'dialect': {
+            # We don't need a path as loading this dialect is managed by
+            # the oascomply.oas3dialect module.
+            'uri': OAS30_DIALECT_METASCHEMA,
+            'vocab-meta': {},
+        },
+    },
+    '3.1': {
+        'schema': {
+            'uri': OAS31_SCHEMA,
+            'path': OAS31_SCHEMA_PATH,
+            'vocabs': OAS31_VOCAB_LIST,
+        },
+        'dialect': {
+            # We don't need a path as loading this dialect is managed by
+            # the oascomply.oas3dialect module.
+            'uri': OAS31_DIALECT_METASCHEMA,
+            'vocab-meta': {},
+        },
+    },
+}
 
 
 __all__ = [
-    'OASJSONFormat',
+    'OASBaseFormat',
+    'OASContainer',
+    'OASDocument',
+    'OASFormat',
+    'OASFragment',
     'OASResourceManager',
+    'OASType',
     'URI',
     'URIError',
     'ThingToURI',
     'PathToURI',
     'URLToURI',
+    'OAS_SCHEMA_INFO',
 ]
 
 
 logger = logging.getLogger(__name__)
 
 
-URI = jschon.URI
+# TODO: Sort out vs oascomply.oas3dialect and oascomply.patch
+OAS_SCHEMA_INFO = {
+    '3.0':  {
+        'schema': {
+            'uri': OAS30_SCHEMA,
+            'path': OAS30_SCHEMA_PATH,
+            'vocabs': OAS30_VOCAB_LIST,
+        },
+        'dialect': {
+            # We don't need a path as loading this dialect is managed by
+            # the oascomply.oas3dialect module.
+            'uri': OAS30_DIALECT_METASCHEMA,
+            'vocab-meta': {},
+        },
+    },
+    '3.1': {
+        'schema': {
+            'uri': OAS31_SCHEMA,
+            'path': OAS31_SCHEMA_PATH,
+            'vocabs': OAS31_VOCAB_LIST,
+        },
+        'dialect': {
+            # We don't need a path as loading this dialect is managed by
+            # the oascomply.oas3dialect module.
+            'uri': OAS31_DIALECT_METASCHEMA,
+            'vocab-meta': {},
+        },
+    },
+}
+
+
+URI: TypeAlias = jschon.URI
 """URI alias for modules that otherwise have no need for jschon."""
 
 
-URIError = jschon.exc.URIError
+URIError: TypeAlias = jschon.exc.URIError
 """URI error alias for modules that otherwise have no need for jschon."""
+
+
+# TODO: Is this in the right module?
+OASType: TypeAlias = str
+"""Alias indicating that the string is an OAS semantic type name."""
 
 
 class ThingToURI:
@@ -247,14 +333,431 @@ class URLToURI(ThingToURI):
         return self.url
 
 
-class OASJSONFormat(JSONFormat):
+class OASBaseFormat(JSONFormat):
+    """Base used to unify :class:`OASFormat` and :class:`OASContainer'"""
+
+
+class OASFormat(OASBaseFormat):
+    """Base for all OAS document nodes."""
     _default_metadocument_cls = Metaschema
 
-    def __init__(self, *args, catalog='oascomply', **kwargs):
-        self.oasversion = '3.0'
+    @classmethod
+    def oas_factory(
+        cls,
+        value,
+        *args,
+        catalog: Union[str, jschon.Catalog] = 'oascomply',
+        oasversion: Optional[Literal['3.0', '3.1']] = None,
+        oastype: OASType = 'OpenAPI',
+        oas_document_pointers=(),
+        oas_fragment_pointers=None,
+        **kwargs,
+    ) -> OASFormat:
+
+        if oas_document_pointers or oas_fragment_pointers:
+            if oas_fragment_pointers is None:
+                oas_fragment_pointers = {}
+            return OASContainer(
+                value,
+                *args,
+                catalog=catalog,
+                oasversion=oasversion,
+                oas_document_pointers=oas_document_pointers,
+                oas_fragment_pointers=oas_fragment_pointers,
+                **kwwrgs,
+            )
+
+        if 'openapi' in value:
+            if oastype != 'OpenAPI':
+                raise ValueError(
+                    f"OAS type {oastype!r} requested for full OAS document",
+                )
+            return OASDocument(
+                value,
+                *args,
+                catalog=catalog,
+                oasversion=oasversion,
+                **kwargs,
+            )
+        if oastype == 'OpenAPI':
+            raise ValueError(
+                f"Full OAS document requested but no 'openapi' field present.",
+            )
+                
+        return OASFragment(
+            value,
+            *args,
+            catalog=catalog,
+            oasversion=oasversion,
+            oastype=oastype,
+            **kwargs,
+        )
+
+    def __init__(self, *args, uri, catalog='oascomply', **kwargs):
+        try:
+            v = self._oasversion
+        except AttributeError:
+            v = None
+        if v is None:
+            raise TypeError(
+                'OASFormat should only be instantiated through a subclass.'
+            )
+
         self.sourcemap = None
         self.url = None
-        super().__init__(*args, catalog=catalog, **kwargs)
+
+        if 'itemclass' not in kwargs:
+            kwargs['itemclass'] = OASNode
+
+        super().__init__(
+            *args,
+            uri=uri,
+            catalog=catalog,
+            **kwargs)
+
+    def is_format_root(self) -> bool:
+        return self.parent is None or not isinstance(self.parent, OASFormat)
+
+    @cached_property
+    def format_parent(self) -> Optional[OASFormat]:
+        """All OASFormat subclasses are considered the same format."""
+        candidate = None
+        current = self
+
+        while (candidate := current.parent) is not None: 
+            if isinstance(candidate, OASFormat):
+                return candidate
+            current = candidate
+        return candidate
+
+    @property
+    def oasversion(self):
+        return self._oasversion
+
+    def _set_oasversion(
+        self,
+        *,
+        uri: URI,
+        parent: Optional[jschon.JSON],
+        from_params=None,
+        from_value=None,
+    ):
+        if (from_params, from_value) == (None, None):
+            if parent is not None and isinstance(parent, OASFormat):
+                self._oasversion = parent.oasversion
+                return
+
+            raise ValueError(
+                f"No OAS version provided or found for <{uri}>",
+            )
+
+        if (
+            from_params is not None and from_value is not None and
+            from_params != from_value
+        ):
+            raise ValueError(
+                f"Expected OAS version {from_params!r} but found "
+                f"version {from_value!r} in <{uri}>",
+            )
+
+        # It does not matter which it is from at this point
+        ov = from_params if from_params else from_params
+        if from_params:
+            self._oasversion = from_params
+        else:
+            self._oasversion = from_value[:from_value.rindex('.')]
+
+        if (
+            parent is not None and
+            isinstance(parent, OASFormat) and
+            self._oasversion != parent.oasversion
+        ):
+            raise ValueError(
+                f"OAS version {self._oasversion!r} for <{uri}> conflicts "
+                f"with parent <{parent.pointer_uri}>",
+            )
+
+        if self._oasversion not in OAS_SCHEMA_INFO:
+            raise ValueError(f"Unknown OAS version {self.oasversion!r}")
+
+    # TODO: Should only OASDocument have this?
+    #       If so, where does OASFragment's schema fragment go?
+    def _get_oas_schema_uri(
+        self,
+        *,
+        uri: URI,
+        from_params: Optional[URI] = None,
+        from_oastype: Optional[URI] = None,
+    ):
+        from_oasversion = URI(
+            OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
+        )
+        if (from_params, from_oastype) == (None, None):
+            return from_oasversion
+
+        bases = {from_oasversion}
+        with_fragment = set()
+        if from_params:
+            bases.add(from_params.copy(fragment=None))
+            if from_params.fragment:
+                with_fragment.add(from_params)
+        if from_oasversion:
+            bases.add(from_oasversion.copy(fragment=None))
+            if from_oasversion.fragment:
+                with_fragment.add(from_oasversion)
+
+        if len(bases) > 1 or len(maybe_fragments) > 1:
+            raise ValueError(
+                f"Conflicting metadocument URIs for <{uri}>:\n"
+                f"\tfrom oasversion: <{from_oasversion}>\n"
+                f"\tfrom parameters: <{from_params}>\n"
+                f"\tfrom oastype:    <{from_oastype}>",
+            )
+
+        if with_fragment:
+            return with_fragment.pop()
+        return from_oasversion
+
+
+class OASDocument(OASFormat):
+    """
+    A class for the root node of a proper OAS document.
+
+    This means an OAS data structure with an "openapi" field at the root.
+    The structure can be embedded in a larger non-OAS document.
+    """
+    def __init__(
+        self,
+        value,
+        *args,
+        uri: Optional[URI] = None,
+        parent: Optional[jschon.JSON] = None,
+        metadocument_uri: Optional[URI] = None,
+        oasversion: Optional[str] = None,
+        **kwargs,
+    ):
+        if parent is None and uri is None:
+            raise ValueError(
+                'The "uri" parameter is required for OASDocument nodes '
+                'that are overall document root nodes (without a parent)',
+            )
+
+        if 'openapi' not in value:
+            raise ValueError(
+                "Expected an 'openapi' field in <{uri}> but none found"
+            )
+
+        self._set_oasversion(
+            uri=uri,
+            parent=parent,
+            from_value=value['openapi'],
+            from_params=oasversion,
+        )
+        metadocument_uri = self._get_oas_schema_uri(
+            uri=uri,
+            from_params=metadocument_uri,
+        )
+
+        super().__init__(
+            value,
+            *args,
+            uri=uri,
+            parent=parent,
+            metadocument_uri=metadocument_uri,
+            oasversion=self.oasversion,
+            **kwargs,
+        )
+
+
+class OASNode(OASFormat):
+    def __init__(
+        self,
+        *args,
+        oasversion: Optional[str] = None,
+        uri: Optional[URI] = None,
+        parent: Optional[jschon.JSON] = None,
+        metadocument_uri: Optional[URI] = None,
+        **kwargs,
+    ):
+        if parent is None:
+            raise ValueError(
+                "Class OASNode cannot be a document root (without a parent)",
+            )
+
+        # TODO: refactor some of this duplication
+        self._set_oasversion(
+            uri=uri,
+            parent=parent,
+            from_params=oasversion,
+        )
+
+        metadocument_uri = self._get_oas_schema_uri(
+            uri=uri,
+            from_params=metadocument_uri,
+        )
+
+        super().__init__(
+            *args,
+            uri=uri,
+            parent=parent,
+            metadocument_uri=metadocument_uri,
+            oasversion=self.oasversion,
+            **kwargs,
+        )
+
+
+class OASFragment(OASFormat):
+    def __init__(
+        self,
+        *args,
+        oastype: str,
+        oasversion: Optional[str] = None,
+        uri: Optional[URI] = None,
+        parent: Optional[jschon.JSON] = None,
+        metadocument_uri: Optional[URI] = None,
+        **kwargs,
+    ):
+        if parent is None and uri is None:
+            raise ValueError(
+                'The "uri" parameter is required for OASFragment nodes '
+                'that are overall document root nodes (without a parent)',
+            )
+
+        self._set_oasversion(
+            uri=uri,
+            parent=parent,
+            from_params=oasversion,
+        )
+        oas_schema_uri = URI(
+            OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
+        )
+        if self.oasversion == '3.0':
+            from_oastype = oas_schema_uri.copy(fragment=oastype)
+        elif self.oasversion == '3.1':
+            kebab_name = []
+            for char in oastype:
+                if char.isupper() and kebab_name:
+                    kebab_name.append('-')
+                kebab_name.append(char.lower())
+            from_oastype = oas_schema_uri.copy(fragment=''.join(kebab_name))
+
+        metadocument_uri = self._get_oas_schema_uri(
+            uri=uri,
+            from_params=metadocument_uri,
+            from_oastype=from_oastype,
+        )
+
+        super().__init__(
+            value,
+            *args,
+            uri=uri,
+            parent=parent,
+            metadocument_uri=metadocument_uri,
+            oasversion=self.oasversion,
+            **kwargs,
+        )
+
+
+class OASContainer(OASBaseFormat):
+    """Non-OAS document node with at least one OASFormat descendant"""
+    def __init__(
+        self,
+        *args,
+        oas_fragment_pointers: Optional[
+            Mapping[jschon.JSONPointer, OASType]
+        ] = None,
+        oas_document_pointers: Sequence[jschon.JSONPointer] = (),
+        **kwargs,
+    ):
+        if (oas_fragment_pointers, oas_document_pointers) == ((), ()):
+            raise ValueError(
+                "OASContainer expects at least one of 'oas_fragment_pointers' "
+                "or 'oas_document_pointers' to be non-empty",
+            )
+
+        if oas_fragment_pointers is None:
+            oas_fragment_pointers = {}
+
+        self._fragment_fields = {}
+        child_fragment_pointers = {}
+
+        for p, t in oas_fragment_pointers.items():
+            if len(p) == 1:
+                self._fragment_fields[p[0]] = t
+            elif len(p) > 1:
+                child_fragment_pointers[p[1:]] = t
+
+        self._document_fields = []
+        child_document_pointers = []
+
+        for p in oas_document_pointers:
+            if len(p) == 1:
+                self._document_fields.append(p[0])
+            elif len(p) > 1:
+                child_document_pointers.append(p[1:])
+            else:
+                raise ValueError(
+                    f'OASContainer OASDocument pointer {p} must have '
+                    'at least one component'
+                )
+
+        if 'itemclass' not in kwargs:
+            kwargs['itemclass'] = OASContainer
+
+        # the oas pointers will get passed through itemkwargs
+        kwargs['oas_document_pointers'] = child_document_pointers
+        kwargs['oas_fragment_pointers'] = child_fragment_pointers
+
+        super.__init__(*args, **kwargs)
+
+    def instantiate_sequence(self, value):
+        seq = []
+        newkwargs = {
+            k: v for k, v in self.itemkwargs.items()
+            if k not in ('child_document_pointers', 'child_fragment_pointers')
+        }
+        for i, v in enumerate(value):
+            si = str(i)
+            if si in self._fragment_fields:
+                seq.append(OASFragment(
+                    v,
+                    oastype=self._fragment_fields[si],
+                    parent=self,
+                    key=si,
+                    **newkwargs,
+                ))
+            elif si in self._document_fields:
+                seq.append(OASDocument(v, parent=self, key=si, **newkwargs))
+            else:
+                seq.append(
+                    self.itemclass(v, parent=self, key=si, **self.itemkwargs),
+                )
+
+        return seq
+
+    def instantiate_mapping(self, value):
+        mapping = {}
+        newkwargs = {
+            k: v for k, v in self.itemkwargs.items()
+            if k not in ('child_document_pointers', 'child_fragment_pointers')
+        }
+        for k, v in value.items():
+            if k in self._fragment_fields:
+                mapping[k] = OASFragment(
+                    v,
+                    oastype=self._fragment_fields[k],
+                    parent=self,
+                    key=k,
+                    **newkwargs,
+                )
+            elif k in self._document_fields:
+                mapping[k] = OASDocument(v, parent=self, key=k, **newkwargs)
+            else:
+                mapping[k] = self.itemclass(
+                    v, parent=self, key=k, **self.itemkwargs,
+                )
+
+        return mapping
 
 
 class OASResourceManager:
@@ -435,15 +938,16 @@ class OASResourceManager:
         uri,
         *,
         oasversion,
-        metadocument_uri,
-        cls,
+        oastype,
     ):
         base_uri = uri.copy(fragment=None)
         r = self._catalog.get_resource(
             uri,
             cacheid=oasversion,
-            metadocument_uri=metadocument_uri,
-            cls=cls,
+            cls=OASBaseFormat,
+            factory=lambda *args, **kwargs: OASFormat.oas_factory(
+                *args, oastype=oastype, oasversion=oasversion, **kwargs
+            ),
         )
 
         if r.document_root.url is None:
@@ -459,7 +963,7 @@ class OASResourceManager:
         initial: Optional[Union[URI, str]] = None,
         *,
         oasversion: str,
-    ) -> Optional[OASJSONFormat]:
+    ) -> Optional[OASFormat]:
         uri = None
         if initial:
             uri = URI(initial) if isinstance(initial, str) else initial
@@ -475,20 +979,12 @@ class OASResourceManager:
         uri: jschon.URI,
         *,
         oasversion: Optional[str] = None,
-        resourceclass: Type[jschon.JSON] = OASJSONFormat,
-        oas_schema_uri: Optional[jschon.URI] = None,
+        oastype: OASType = 'OpenAPI',
     ):
-        if oas_schema_uri is None:
-            oas_schema_uri = {
-                '3.0': OAS30_SCHEMA,
-                '3.1': OAS31_SCHEMA,
-            }[oasversion]
-
         oas_doc = self._get_with_url_and_sourcemap(
             uri,
             oasversion=oasversion,
-            metadocument_uri=oas_schema_uri,
-            cls=resourceclass,
+            oastype=oastype,
         )
         return oas_doc
 
