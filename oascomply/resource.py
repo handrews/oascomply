@@ -535,6 +535,25 @@ class OASNode(JSONResource, OASNodeBase):
             f'<{self.pointer_uri}>',
         )
 
+    @cached_property
+    def containing_format_root(self):
+        current = self
+        while (p := current.parent) is not None:
+            if isinstance(p, OASFormat):
+                return p.format_root
+            current = p
+        return None
+
+    @property
+    def sourcemap(self):
+        return self.containing_format_root.sourcemap
+
+    @property
+    def url(self):
+        return self.resource_root.url.copy(
+            fragment=self.pointer_uri.fragment,
+        )
+
 
 class OASFormat(JSONFormat, OASNodeBase):
     """Base for all OAS document nodes."""
@@ -553,8 +572,8 @@ class OASFormat(JSONFormat, OASNodeBase):
         logger.info(f'...provided node uri <{kwargs.get("uri")}>')
         logger.info(f'...provided meta uri <{kwargs.get("metadocument_uri")}>')
 
-        self.sourcemap = None
-        self.url = None
+        self._sourcemap = None
+        self._url = None
 
         if 'itemclass' not in kwargs:
             kwargs['itemclass'] = OASNode
@@ -580,11 +599,30 @@ class OASFormat(JSONFormat, OASNodeBase):
         candidate = None
         current = self
 
-        while (candidate := current.parent) is not None: 
+        while (candidate := current.parent) is not None:
             if isinstance(candidate, OASFormat):
                 return candidate
             current = candidate
         return candidate
+
+    # TODO: should URLs only be document-scope? resource-scope?
+    #       URLs for embedded resources would be document root-relative...
+    #       Should the document root URL have an empty fragment or no fragment?
+    @property
+    def url(self):
+        return self._url
+
+    @url.setter
+    def url(self, url):
+        self._url = url
+
+    @property
+    def sourcemap(self):
+        return self._sourcemap
+
+    @sourcemap.setter
+    def sourcemap(self, sourcemap):
+        self._sourcemap = sourcemap
 
     # TODO: Should only OASDocument have this?
     #       If so, where does OASFragment's schema fragment go?
@@ -730,7 +768,6 @@ class OASFragment(OASFormat):
             from_params=metadocument_uri,
             from_oastype=from_oastype,
         )
-
         super().__init__(
             *args,
             uri=uri,
