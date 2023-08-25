@@ -45,3 +45,12 @@ autodoc_inherit_docstrings = False
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+
+# -- Options for intersphinx -----------------------------------------------------
+# Configuration for intersphinx: refer to the Python standard library and the
+# fork of jschon currently being used.
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "jschon": ("https://handrews.github.io/renderings/jschon-for-oascomply", "jschon-objects.inv")
+}
+
