@@ -429,7 +429,7 @@ class OASNodeBase:
                 f"Full OAS document requested for <{uri}> but "
                 "no 'openapi' field present.",
             )
-                
+
         return OASFragment(
             value,
             *args,
@@ -509,6 +509,10 @@ class OASNode(JSONResource, OASNodeBase):
             raise ValueError(
                 "Class OASNode cannot be a document root (without a parent)",
             )
+        logger.info(
+            f'Creating new {type(self).__name__} ({id(self)}), '
+            f'provided uri <{kwargs.get("uri")}>',
+        )
 
         # TODO: refactor some of this duplication
         self._set_oasversion(
@@ -526,6 +530,11 @@ class OASNode(JSONResource, OASNodeBase):
             **kwargs,
         )
 
+        logger.info(
+            f'New {type(self).__name__} ({id(self)}) created: '
+            f'<{self.pointer_uri}>',
+        )
+
 
 class OASFormat(JSONFormat, OASNodeBase):
     """Base for all OAS document nodes."""
@@ -540,7 +549,7 @@ class OASFormat(JSONFormat, OASNodeBase):
             raise TypeError(
                 'OASFormat should only be instantiated through a subclass.'
             )
-        logger.info(f'Creating new {type(self).__name__}...')
+        logger.info(f'Creating new {type(self).__name__} ({id(self)})...')
         logger.info(f'...provided node uri <{kwargs.get("uri")}>')
         logger.info(f'...provided meta uri <{kwargs.get("metadocument_uri")}>')
 
@@ -557,7 +566,8 @@ class OASFormat(JSONFormat, OASNodeBase):
             **kwargs)
 
         logger.info(
-            f'New {type(self).__name__} created: <{self.pointer_uri}>...',
+            f'New {type(self).__name__} ({id(self)}) created: '
+            f'<{self.pointer_uri}>...',
         )
         logger.info(f'...metadocument <{self.metadocument_uri}>')
 
@@ -589,12 +599,16 @@ class OASFormat(JSONFormat, OASNodeBase):
             OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
         )
         logger.debug(
-            f'OAS metadocument candidates for <{uri}>\n'
-            f'\tfrom params:     <{from_params}>\n'
-            f'\tfrom oastype:    <{from_oastype}>\n'
-            f'\tfrom oasversion: <{from_oasversion}>',
+            f'OAS metadocument candidates for <{uri}> ({id(self)}):\n'
+            f'\t\tfrom params:     <{from_params}>\n'
+            f'\t\tfrom oastype:    <{from_oastype}>\n'
+            f'\t\tfrom oasversion: <{from_oasversion}>',
         )
         if (from_params, from_oastype) == (None, None):
+            logger.debug(
+                f'Selected metadocument <{from_oasversion}> '
+                f'for <{uri}> ({id(self)})',
+            )
             return from_oasversion
 
         bases = {from_oasversion}
@@ -603,10 +617,10 @@ class OASFormat(JSONFormat, OASNodeBase):
             bases.add(from_params.copy(fragment=None))
             if from_params.fragment:
                 with_fragment.add(from_params)
-        if from_oasversion:
-            bases.add(from_oasversion.copy(fragment=None))
-            if from_oasversion.fragment:
-                with_fragment.add(from_oasversion)
+        if from_oastype:
+            bases.add(from_oastype.copy(fragment=None))
+            if from_oastype.fragment:
+                with_fragment.add(from_oastype)
 
         if len(bases) > 1 or len(with_fragment) > 1:
             raise ValueError(
@@ -616,9 +630,11 @@ class OASFormat(JSONFormat, OASNodeBase):
                 f"\tfrom oastype:    <{from_oastype}>",
             )
 
-        if with_fragment:
-            return with_fragment.pop()
-        return from_oasversion
+        selected = with_fragment.pop() if with_fragment else from_oasversion
+        logger.debug(
+            f'Selected metadocument <{selected}> for <{uri}> ({id(self)})',
+        )
+        return selected.copy()
 
 
 class OASDocument(OASFormat):
@@ -696,6 +712,7 @@ class OASFragment(OASFormat):
         oas_schema_uri = URI(
             OAS_SCHEMA_INFO[self.oasversion]['schema']['uri']
         )
+
         if self.oasversion == '3.0':
             from_oastype = oas_schema_uri.copy(fragment=f'/$defs/{oastype}')
         elif self.oasversion == '3.1':
@@ -740,6 +757,10 @@ class OASContainer(JSONResource, OASNodeBase):
                 "OASContainer expects at least one of 'oas_fragment_pointers' "
                 "or 'oas_document_pointers' to be non-empty",
             )
+        logger.info(
+            f'Creating new {type(self).__name__} ({id(self)}), '
+            f'provided uri <{kwargs.get("uri")}>',
+        )
 
         if oas_fragment_pointers is None:
             oas_fragment_pointers = {}
@@ -775,6 +796,11 @@ class OASContainer(JSONResource, OASNodeBase):
         kwargs['oas_fragment_pointers'] = child_fragment_pointers
 
         super.__init__(*args, **kwargs)
+
+        logger.info(
+            f'New {type(self).__name__} ({id(self)}) created: '
+            f'<{self.pointer_uri}>',
+        )
 
     def instantiate_sequence(self, value):
         seq = []

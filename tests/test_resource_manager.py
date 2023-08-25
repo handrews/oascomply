@@ -435,3 +435,6 @@ def test_oas_container(manager):
     p = manager.get_oas(A_JUNK_URI, oasversion='3.0', oastype='PathItem')
     assert isinstance(p, OASFragment)
     assert p.oasversion == '3.0'
+    assert p.metadocument_uri == URI(
+        OAS_SCHEMA_INFO['3.0']['schema']['uri'],
+    ).copy(fragment=f'/$defs/PathItem')
