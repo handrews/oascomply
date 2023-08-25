@@ -254,7 +254,7 @@ class OASJSONFormat(JSONFormat):
         self.oasversion = '3.0'
         self.sourcemap = None
         self.url = None
-        super().__init__(*args, catalog='oascomply', **kwargs)
+        super().__init__(*args, catalog=catalog, **kwargs)
 
 
 class OASResourceManager:
@@ -473,8 +473,8 @@ class OASResourceManager:
     def get_oas(
         self,
         uri: jschon.URI,
-        oasversion: str,
         *,
+        oasversion: Optional[str] = None,
         resourceclass: Type[jschon.JSON] = OASJSONFormat,
         oas_schema_uri: Optional[jschon.URI] = None,
     ):
