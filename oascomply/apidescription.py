@@ -70,10 +70,6 @@ class ApiDescription:
                 "Initial API description must include `openapi` field!"
                 f"{path} <{uri}>"
             )
-        if document.oasversion != '3.0':
-            if document.oasversion == '3.1':
-                raise NotImplementedError("OAS v3.1 support stil in progress")
-            raise ValueError(f"OAS v{self._version} not supported!")
 
         if (
             document.uri.path and '/' in document.uri.path and

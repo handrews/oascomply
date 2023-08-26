@@ -372,10 +372,8 @@ def load():
     )
 
     # TODO: Temporary hack, search lists properly
-    # TODO: Don't hardcode 3.0
     entry_resource = manager.get_entry_resource(
         args.initial,
-        oasversion='3.0',
     )
     if entry_resource is None:
         sys.stderr.write(
