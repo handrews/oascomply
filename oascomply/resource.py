@@ -272,13 +272,17 @@ class OASNodeBase:
         *args,
         catalog: Union[str, jschon.Catalog] = 'oascomply',
         uri: Optional[URI] = None,
+        request_uri: Optional[URI] = None,
         oasversion: Optional[OASVersion] = None,
         oastype: OASType = 'OpenAPI',
         **kwargs,
     ) -> OASNodeBase:
 
-        if uri is not None and uri.fragment and uri.fragment.startswith('/'):
-            pointer = jschon.JSONPointer.parse_uri_fragment(uri.fragment)
+        if (
+            request_uri is not None and request_uri.fragment and
+            request_uri.fragment.startswith('/')
+        ):
+            pointer = jschon.JSONPointer.parse_uri_fragment(request_uri.fragment)
             if oastype == 'OpenAPI':
                 kwargs['oas_document_pointers'] = [pointer]
             else:
@@ -293,7 +297,7 @@ class OASNodeBase:
                 oasversion=oasversion,
                 oas_document_pointers=oas_document_pointers,
                 oas_fragment_pointers=oas_fragment_pointers,
-                **kwwrgs,
+                **kwargs,
             )
 
         if oastype == 'Schema':
