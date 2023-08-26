@@ -390,9 +390,14 @@ class OASNodeBase:
         from_value=None,
     ):
         if (from_params, from_value) == (None, None):
-            if parent is not None and isinstance(parent, OASFormat):
-                self._oasversion = parent.oasversion
-                return
+            # This method is called too early in the init process for
+            # properties like resource_parent or format_parent to work.
+            ancestor = parent
+            while ancestor is not None:
+                if isinstance(ancestor, OASNodeBase):
+                    self._oasversion = ancestor.oasversion
+                    return
+                ancestor = ancestor.parent
 
             raise ValueError(
                 f"No OAS version provided or found for <{uri}>",
