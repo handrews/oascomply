@@ -13,7 +13,7 @@ import jschon
 import jschon.catalog
 from jschon.catalog import _2020_12
 from oascomply.oassource import DirectMapSource
-from oascomply.resource import OASResourceManager, URI, OAS_SCHEMA_INFO
+from oascomply.resource import OASCatalog, URI, OAS_SCHEMA_INFO
 from oascomply.oas3dialect import (
     # TODO: sort out vs oascomply.patch
     OAS30_SCHEMA,
@@ -55,6 +55,7 @@ catalog = jschon.create_catalog(
     '2020-12',
     name='oascomply',
     resolve_references=False,
+    cls=OASCatalog,
 )
 """The default shared ``jschon``-derived resource loader and cache"""
 
@@ -88,15 +89,12 @@ catalog.add_uri_source(
     jschon.catalog.LocalSource(PATCHED_OAS30_SCHEMA_DIR, suffix='.json'),
 )
 
-OASResourceManager.update_direct_mapping(
-    catalog,
-    {
-        URI(OAS30_SCHEMA): OAS30_SCHEMA_PATH,
-        URI(OAS31_SCHEMA): OAS31_SCHEMA_PATH,
-        URI(OAS31_DIALECT_METASCHEMA): PATCHED_OAS31_DIALECT_PATH,
-        URI(OAS31_EXTENSION_METASCHEMA): PATCHED_OAS31_META_PATH,
-    },
-)
+catalog.update_direct_mapping({
+    URI(OAS30_SCHEMA): OAS30_SCHEMA_PATH,
+    URI(OAS31_SCHEMA): OAS31_SCHEMA_PATH,
+    URI(OAS31_DIALECT_METASCHEMA): PATCHED_OAS31_DIALECT_PATH,
+    URI(OAS31_EXTENSION_METASCHEMA): PATCHED_OAS31_META_PATH,
+})
 
 _2020_12.initialize(catalog)
 initialize_oas30_dialect(catalog)

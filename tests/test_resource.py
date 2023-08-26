@@ -14,6 +14,7 @@ from oascomply.resource import (
     OASDocument,
     OASFragment,
     OASJSONSchema,
+    OASCatalog,
     OASResourceManager,
     URI,
     ThingToURI,
@@ -95,7 +96,7 @@ A_JUNK_CONTENT_TYPE = 'application/yaml'
 
 @pytest.fixture
 def catalog():
-    return jschon.create_catalog('2020-12', name='test')
+    return jschon.create_catalog('2020-12', name='test', cls=OASCatalog)
 
 
 @pytest.fixture
@@ -119,16 +120,16 @@ def test_update_direct_mapping(catalog):
 
     mapping = {uri1: path1, uri2: path2}
 
-    OASResourceManager.update_direct_mapping(catalog, mapping)
+    catalog.update_direct_mapping(mapping)
 
-    dm = OASResourceManager._direct_sources[catalog]
+    dm = catalog._direct_sources[catalog]
     assert isinstance(dm, DirectMapSource), type(dm).__name__
     assert dm._map == mapping
 
-    OASResourceManager.update_direct_mapping(catalog, {uri1: path3})
+    catalog.update_direct_mapping({uri1: path3})
 
     updated_map = {uri1: path3, uri2: path2}
-    assert OASResourceManager._direct_sources[catalog]._map == updated_map
+    assert catalog._direct_sources[catalog]._map == updated_map
 
 
 @pytest.mark.parametrize('base,prefix', (
@@ -137,12 +138,12 @@ def test_update_direct_mapping(catalog):
 ))
 def test_add_uri_source(base, prefix, catalog):
     dm = DirectMapSource({})
-    OASResourceManager.add_uri_source(catalog, base, dm)
+    catalog.add_uri_source(base, dm)
 
     assert dm._uri_prefix == prefix
     assert catalog._uri_sources[prefix] is dm
-    assert OASResourceManager._url_maps[catalog] is dm._uri_url_map
-    assert OASResourceManager._sourcemap_maps[catalog] is dm._uri_sourcemap_map
+    assert catalog._url_maps[catalog] is dm._uri_url_map
+    assert catalog._sourcemap_maps[catalog] is dm._uri_sourcemap_map
 
 
 @pytest.mark.parametrize('kwargs,sources', (
