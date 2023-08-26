@@ -295,7 +295,6 @@ class OASNodeBase:
                 uri=uri,
                 catalog=catalog,
                 oasversion=oasversion,
-                resolve_references=False,
                 **kwargs,
             )
 
@@ -769,10 +768,24 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             parent=parent,
             from_params=oasversion,
         )
+        metaschema_uri = kwargs.get('metaschema_uri')
+        if (
+            None not in (metaschema_uri, metadocument_uri) and
+            metaschema_uri != metadocument_uri
+        ):
+            raise ValueError(
+                f'Conflicting metadocument <{metadocument_uri}> and '
+                f'metaschema <{metaschema_uri}>'
+            )
+
         if metadocument_uri is None:
             # TODO: handle 3.1 properly
-            metadocument_uri = \
+            metadocument_uri = (
                 URI(OAS_SCHEMA_INFO[self.oasversion]['dialect']['uri'])
+                if metaschema_uri is None
+                else metaschema_uri
+            )
+        kwargs['metaschema_uri'] = metadocument_uri
 
         self._url = None
         self._sourcemap = None
@@ -783,7 +796,6 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             uri=uri,
             parent=parent,
             catalog=catalog,
-            metaschema_uri=metadocument_uri,
             **kwargs,
         )
 
