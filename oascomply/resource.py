@@ -794,8 +794,14 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             f'in {self.catalog}[{self.cacheid!r}]',
         )
 
-    def get_subschema_cls(self):
-        return OASJSONSchema
+    def _oas_schema_factory(self, *args, **kwargs) -> OASJSONSchema:
+        newkwargs = kwargs.copy()
+        newkwargs.setdefault('oasversion', self.oasversion)
+        newkwargs.setdefault('oastype', self.oastype)
+        return OASNodeBase.oas_factory(*args, **newkwargs)
+
+    def get_schema_factory(self):
+        return OASJSONSchema, self._oas_schema_factory
 
     def is_format_root(self):
         return (
