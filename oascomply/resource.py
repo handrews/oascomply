@@ -295,6 +295,7 @@ class OASNodeBase:
                 uri=uri,
                 catalog=catalog,
                 oasversion=oasversion,
+                resolve_references=False,
             )
 
         if 'openapi' in value:
@@ -798,6 +799,7 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
         newkwargs = kwargs.copy()
         newkwargs.setdefault('oasversion', self.oasversion)
         newkwargs.setdefault('oastype', self.oastype)
+        newkwargs.setdefault('resolve_references', self._auto_resolve_references)
         return OASNodeBase.oas_factory(*args, **newkwargs)
 
     def get_schema_factory(self):
