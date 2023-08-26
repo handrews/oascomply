@@ -1193,10 +1193,11 @@ class OASResourceManager:
         )
 
         if r.document_root.url is None:
-            logger.debug(f'No URL for <{r.document_root.pointer_uri}>')
-            logger.debug(f'URI <{uri}>; BASE URI <{base_uri}>')
+            logger.debug(f'No URL for document <{r.document_root.pointer_uri}>')
+            logger.debug(f'...URI <{uri}>; BASE URI <{base_uri}>')
             r.document_root.url = self.get_url(base_uri)
             r.document_root.source_map = self.get_sourcemap(base_uri)
+            logger.debug(f'...set document URL <{r.document_root.url}>')
 
         return r
 

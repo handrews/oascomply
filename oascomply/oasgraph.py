@@ -143,7 +143,7 @@ class OasGraph:
         return self._g
 
     def add_resource(self, url, uri, filename=None):
-        logger.debug(f'Adding resource <{uri}> loaded from <{url}>')
+        logger.info(f'Adding resource <{uri}> loaded from <{url}> to graph')
         rdf_node = rdflib.URIRef(str(uri))
         if not self._test_mode:
             self._g.add((
