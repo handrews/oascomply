@@ -1,9 +1,14 @@
-{
+{"filler": {
     "get": {
         "responses": {
             "200": {
+                "schema": {
+                    "type": ["string", "null"],
+                    "example": null,
+                    "default": "four"
+                },
                 "$ref": "../openapi#/components/responses/foo"
             }
         }
     }
-}
+}}

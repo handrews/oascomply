@@ -1,6 +1,6 @@
-{
+{"filler": {
     "type": "string",
     "nullable": true,
     "example": null,
     "default": "four"
-}
+}}

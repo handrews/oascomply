@@ -1,5 +1,5 @@
 {
-    "openapi": "3.0.3",
+    "openapi": "3.1.0",
     "info": {
         "title": "Basic referencing",
         "version": "1.0.0"
@@ -17,20 +17,21 @@
                     "application/json": {
                         "schema": {
                             "$ref": "#/components/schemas/bar"
-                        },
-                        "example": "one"
+                        }
                     }
                 },
                 "links": {
                     "self": {
-                        "operationRef": "pathitems/foo#/get"
+                        "operationRef": "pathitems/foo#/filler/get"
                     }
                 }
             }
         },
         "schemas": {
             "bar": {
-                "$ref": "schemas/bar#"
+                "type": ["string", "null"],
+                "example": null,
+                "default": "four"
             }
         }
     }
