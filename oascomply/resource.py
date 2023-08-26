@@ -158,6 +158,110 @@ class OASNodeBase:
     extending :class:`~jschon.resource.JSONResource` avoids the confusion
     common with "diamond-shaped" mutiple inheritance.
     """
+    _SCHEMA_LOCATIONS: ClassVar[
+        Dict[
+            OASType,
+            Dict[
+                OASType,
+                Union[Dict, OASType, bool]
+            ]
+        ]
+    ] = defaultdict(dict, {
+        'OpenAPI': {
+            'paths': 'Paths',
+            'components': 'Components',
+            # TODO: 3.1 only
+            'webhooks': {
+                r'.*': 'PathItem',
+            },
+        },
+        'Components': {
+            'schemas': {
+                r'.*': True,
+            },
+            'responses': {
+                r'.*': 'Response',
+            },
+            'parameters': {
+                r'.*': 'Parameter',
+            },
+            'requestBodies': {
+                r'.*': 'RequestBody',
+            },
+            'headers': {
+                r'.*': 'Header',
+            },
+            'callbacks': {
+                r'.*': 'Callback',
+            },
+            # TODO: 3.1 only
+            'pathItems': {
+                r'.*': 'PathItem',
+            },
+        },
+        'Paths': {
+            r'^/.*$': 'PathItem',
+        },
+        'PathItem': {
+            'parameters': {
+                r'0-9+': 'Parameter',
+            },
+            r'(get)|(put)|(post)|(delete)|(options)|(head)|(patch)|(trace)':
+                'Operation',
+        },
+        'Operation': {
+            'parameters': {
+                r'0-9+': 'Parameter',
+            },
+            'requestBody': 'RequestBody',
+            'responses': {
+                r'(default)|([1-5][X0-9][X0-9])':
+                    'Response',
+            },
+            'callbacks': {
+                r'.*': 'Callback',
+            },
+        },
+        'Parameter': {
+            'schema': True,
+            'content': {
+                r'.*': 'MediaType',
+            },
+        },
+        'Parameter': {
+            'schema': True,
+            # Unclear if 'content' is relevant to headers, but doesn't hurt
+            'content': {
+                r'.*': 'MediaType',
+            },
+        },
+        'RequestBody': {
+            'content': {
+                r'.*': 'MedaiType',
+            },
+        },
+        'Response': {
+            'headers': {
+                r'.*': 'Header',
+            },
+            'content': {
+                r'.*': 'MediaType',
+            },
+        },
+        'MediaType': {
+            'schema': True,
+            'encoding': {
+                'headers': {
+                    r'.*': 'Header',
+                },
+            },
+        },
+        'Callback': {
+            # Runtime expressions start with "$", extensions start with "x-"
+            r'\$.*': 'PathItem',
+        },
+    })
+
     @classmethod
     def oas_factory(
         cls,
@@ -226,6 +330,38 @@ class OASNodeBase:
             **kwargs,
         )
 
+    def check_for_schema(
+        self,
+        field: str,
+    ) -> Union[bool, jschon.JSONPointer]:
+        for k, v in self.schema_pointer.evaluate(self._SCHEMA_LOCATIONS):
+            if re.fullmatch(k, field):
+                if v is True:
+                    return True
+                elif isinstance(v, OASType):
+                    return (v, jschon.JSONPointer())
+                return (oastype, pointer / k)
+        return False
+
+    @property
+    def oastype(self) -> Optional[OASType]:
+        try:
+            return self._oastype
+        except AttributeError:
+            self._oastype = None
+            return self._oastype
+
+    @property
+    def schema_pointer(self) -> Optional[jschon.JSONSchema]:
+        try:
+            return self._schema_pointer
+        except AttributeError:
+            self._schema_pointer = (
+                jschon.JSONPointer([self.oastype]) if self.oastype
+                else None
+            )
+            return self._schema_pointer
+
     @property
     def oasversion(self):
         return self._oasversion
@@ -279,9 +415,6 @@ class OASNodeBase:
         if self._oasversion not in OAS_SCHEMA_INFO:
             raise ValueError(f"Unknown OAS version {self.oasversion!r}")
 
-    def instantiate_mapping(self, value):
-        super().instantiate_mapping(self, value)
-
 
 class OASNode(JSONResource, OASNodeBase):
     """Node in an OAS doc that is not aware of its OAS type or metadocument"""
@@ -292,6 +425,7 @@ class OASNode(JSONResource, OASNodeBase):
         uri: Optional[URI] = None,
         parent: Optional[jschon.JSON] = None,
         catalog: Union[str, jschon.Catalog] = 'oascomply',
+        schema_pointer: Optional[jschon.JSONPointer] = None,
         **kwargs,
     ):
         if parent is None:
@@ -302,6 +436,8 @@ class OASNode(JSONResource, OASNodeBase):
             f'Creating new {type(self).__name__} ({id(self)}), '
             f'provided uri <{kwargs.get("uri")}>',
         )
+
+        self._schema_pointer = schema_pointer
 
         # TODO: refactor some of this duplication
         self._set_oasversion(
@@ -464,130 +600,6 @@ class OASFormat(JSONFormat, OASNodeBase):
         return selected.copy()
 
 
-class SchemaFinder:
-    @classmethod
-    def check_for_schema(
-        cls,
-        pointer: Union[OASType, jschon.JSONPointer],
-        field: str,
-    ) -> Union[bool, jschon.JSONPointer]:
-        if isinstance(pointer, OASType):
-            pointer = JSONPointer([pointer])
-        for k, v in pointer.evaluate(cls._LOCATIONS):
-            if re.fullmatch(k, field):
-                if v is True:
-                    return True
-                elif isinstance(v, OASType):
-                    return (v, jschon.JSONPointer())
-                return (oastype, pointer / k)
-        return False
-
-
-    _LOCATIONS: ClassVar[
-        Dict[
-            OASType,
-            Dict[
-                OASType,
-                Union[Dict, OASType, bool]
-            ]
-        ]
-    ] = defaultdict(dict, {
-        'OpenAPI': {
-            'paths': 'Paths',
-            'components': 'Components',
-            # TODO: 3.1 only
-            'webhooks': {
-                r'.*': 'PathItem',
-            },
-        },
-        'Components': {
-            'schemas': {
-                r'.*': True,
-            },
-            'responses': {
-                r'.*': 'Response',
-            },
-            'parameters': {
-                r'.*': 'Parameter',
-            },
-            'requestBodies': {
-                r'.*': 'RequestBody',
-            },
-            'headers': {
-                r'.*': 'Header',
-            },
-            'callbacks': {
-                r'.*': 'Callback',
-            },
-            # TODO: 3.1 only
-            'pathItems': {
-                r'.*': 'PathItem',
-            },
-        },
-        'Paths': {
-            r'^/.*$': 'PathItem',
-        },
-        'PathItem': {
-            'parameters': {
-                r'0-9+': 'Parameter',
-            },
-            r'(get)|(put)|(post)|(delete)|(options)|(head)|(patch)|(trace)':
-                'Operation',
-        },
-        'Operation': {
-            'parameters': {
-                r'0-9+': 'Parameter',
-            },
-            'requestBody': 'RequestBody',
-            'responses': {
-                r'(default)|([1-5][X0-9][X0-9])':
-                    'Response',
-            },
-            'callbacks': {
-                r'.*': 'Callback',
-            },
-        },
-        'Parameter': {
-            'schema': True,
-            'content': {
-                r'.*': 'MediaType',
-            },
-        },
-        'Parameter': {
-            'schema': True,
-            # Unclear if 'content' is relevant to headers, but doesn't hurt
-            'content': {
-                r'.*': 'MediaType',
-            },
-        },
-        'RequestBody': {
-            'content': {
-                r'.*': 'MedaiType',
-            },
-        },
-        'Response': {
-            'headers': {
-                r'.*': 'Header',
-            },
-            'content': {
-                r'.*': 'MediaType',
-            },
-        },
-        'MediaType': {
-            'schema': True,
-            'encoding': {
-                'headers': {
-                    r'.*': 'Header',
-                },
-            },
-        },
-        'Callback': {
-            # Runtime expressions start with "$", extensions start with "x-"
-            r'\$.*': 'PathItem',
-        },
-    })
-
-
 class OASDocument(OASFormat):
     """
     A class for the root node of a proper OAS document.
@@ -636,6 +648,10 @@ class OASDocument(OASFormat):
             oasversion=self.oasversion,
             **kwargs,
         )
+
+    @property
+    def oastype(self) -> Optional[OASType]:
+        return 'OpenAPI'
 
 
 class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
