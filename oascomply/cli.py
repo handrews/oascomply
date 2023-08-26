@@ -239,6 +239,16 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     # Already parsed, but add to include in usage message
     _add_strip_suffixes_option(parser)
     parser.add_argument(
+        '-a',
+        '--autoload-known',
+        action='store_true',
+        help="Automatically load and parse all documents from -f or -u; "
+             'this is required for documents containing schemas with "$id"'
+             'as oascomply has no way to know in advance what "$id"-decalred '
+             'URIs are present in which document.  By default, documents are '
+             'only loaded when referenced.',
+    )
+    parser.add_argument(
         '-d',
         '--directory',
         nargs='+',
