@@ -284,6 +284,7 @@ class OASNodeBase:
             else:
                 kwargs['oas_fragment_pointers'] = {pointer: oastype}
 
+            logger.info(f'instantiating OASContainer for <{uri}> ({oastype})')
             return OASContainer(
                 value,
                 *args,
@@ -296,6 +297,7 @@ class OASNodeBase:
             )
 
         if oastype == 'Schema':
+            logger.info(f'instantiating OASJSONSchema for <{uri}> ({oastype})')
             return OASJSONSchema(
                 value,
                 uri=uri,
@@ -310,6 +312,7 @@ class OASNodeBase:
                     f"OAS type {oastype!r} requested for full "
                     f"OAS document <{uri}>",
                 )
+            logger.info(f'instantiating OASDocument for <{uri}> ({oastype})')
             return OASDocument(
                 value,
                 *args,
@@ -324,6 +327,7 @@ class OASNodeBase:
                 "no 'openapi' field present.",
             )
 
+        logger.info(f'instantiating OASFragment for <{uri}> ({oastype})')
         return OASFragment(
             value,
             *args,
@@ -455,6 +459,7 @@ class OASNodeBase:
                     catalog=self.catalog,
                     cacheid=self.cacheid,
                     oasversion=self.oasversion,
+                    resolve_references=False,
                 )
             else:
                 newkwargs = self.itemkwargs.copy()
@@ -485,6 +490,7 @@ class OASNodeBase:
                     catalog=self.catalog,
                     cacheid=self.cacheid,
                     oasversion=self.oasversion,
+                    resolve_references=False,
                 ))
             else:
                 newkwargs = self.itemkwargs.copy()
@@ -980,13 +986,21 @@ class OASContainer(JSONResource, OASNodeBase):
         for i, v in enumerate(value):
             si = str(i)
             if si in self._fragment_fields:
-                seq.append(OASFragment(
-                    v,
-                    oastype=self._fragment_fields[si],
-                    parent=self,
-                    key=si,
-                    **newkwargs,
-                ))
+                if self._fragment_fields[si] == 'Schema':
+                    seq.append(OASJSONSchema(
+                        v,
+                        parent=self,
+                        key=si,
+                        **newkwargs,
+                    ))
+                else:
+                    seq.append(OASFragment(
+                        v,
+                        oastype=self._fragment_fields[si],
+                        parent=self,
+                        key=si,
+                        **newkwargs,
+                    ))
             elif si in self._document_fields:
                 seq.append(OASDocument(v, parent=self, key=si, **newkwargs))
             else:
@@ -1004,13 +1018,21 @@ class OASContainer(JSONResource, OASNodeBase):
         }
         for k, v in value.items():
             if k in self._fragment_fields:
-                mapping[k] = OASFragment(
-                    v,
-                    oastype=self._fragment_fields[k],
-                    parent=self,
-                    key=k,
-                    **newkwargs,
-                )
+                if self._fragment_fields[k] == 'Schema':
+                    mapping[k] = OASJSONSchema(
+                        v,
+                        parent=self,
+                        key=k,
+                        **newkwargs,
+                    )
+                else:
+                    mapping[k] = OASFragment(
+                        v,
+                        oastype=self._fragment_fields[k],
+                        parent=self,
+                        key=k,
+                        **newkwargs,
+                    )
             elif k in self._document_fields:
                 mapping[k] = OASDocument(v, parent=self, key=k, **newkwargs)
             else:
