@@ -188,6 +188,14 @@ class OASNodeBase:
                 **kwwrgs,
             )
 
+        if oastype == 'Schema':
+            return OASJSONSchema(
+                value,
+                uri=uri,
+                catalog=catalog,
+                oasversion=oasversion,
+            )
+
         if 'openapi' in value:
             if oastype != 'OpenAPI':
                 raise ValueError(
@@ -270,6 +278,9 @@ class OASNodeBase:
 
         if self._oasversion not in OAS_SCHEMA_INFO:
             raise ValueError(f"Unknown OAS version {self.oasversion!r}")
+
+    def instantiate_mapping(self, value):
+        super().instantiate_mapping(self, value)
 
 
 class OASNode(JSONResource, OASNodeBase):
@@ -455,111 +466,125 @@ class OASFormat(JSONFormat, OASNodeBase):
 
 class SchemaFinder:
     @classmethod
-    def check_for_schema(cls, oastype):
-        return cls._LOCATIONS[oastype]
+    def check_for_schema(
+        cls,
+        pointer: Union[OASType, jschon.JSONPointer],
+        field: str,
+    ) -> Union[bool, jschon.JSONPointer]:
+        if isinstance(pointer, OASType):
+            pointer = JSONPointer([pointer])
+        for k, v in pointer.evaluate(cls._LOCATIONS):
+            if re.fullmatch(k, field):
+                if v is True:
+                    return True
+                elif isinstance(v, OASType):
+                    return (v, jschon.JSONPointer())
+                return (oastype, pointer / k)
+        return False
+
 
     _LOCATIONS: ClassVar[
         Dict[
             OASType,
             Dict[
-                str,
-                 Union[Dict, Callable, bool]
+                OASType,
+                Union[Dict, OASType, bool]
             ]
         ]
-    ] = defaultdict(bool, {
-        'OpenAPI': defaultdict(bool, {
+    ] = defaultdict(dict, {
+        'OpenAPI': {
             'paths': 'Paths',
             'components': 'Components',
             # TODO: 3.1 only
-            'webhooks': defaultdict(bool, {
+            'webhooks': {
                 r'.*': 'PathItem',
-            }),
-        }),
-        'Components': defaultdict(bool, {
-            'schemas': defaultdict(bool, {
+            },
+        },
+        'Components': {
+            'schemas': {
                 r'.*': True,
-            }),
-            'responses': defaultdict(bool, {
+            },
+            'responses': {
                 r'.*': 'Response',
-            }),
-            'parameters': defaultdict(bool, {
+            },
+            'parameters': {
                 r'.*': 'Parameter',
-            }),
-            'requestBodies': defaultdict(bool, {
+            },
+            'requestBodies': {
                 r'.*': 'RequestBody',
-            }),
-            'headers': defaultdict(bool, {
+            },
+            'headers': {
                 r'.*': 'Header',
-            }),
-            'callbacks': defaultdict(bool, {
+            },
+            'callbacks': {
                 r'.*': 'Callback',
-            }),
+            },
             # TODO: 3.1 only
-            'pathItems': defaultdict(bool, {
+            'pathItems': {
                 r'.*': 'PathItem',
-            }),
-        }),
-        'Paths': defaultdict(bool, {
+            },
+        },
+        'Paths': {
             r'^/.*$': 'PathItem',
-        }),
-        'PathItem': defaultdict(bool, {
-            'parameters': defaultdict(bool, {
+        },
+        'PathItem': {
+            'parameters': {
                 r'0-9+': 'Parameter',
-            }),
+            },
             r'(get)|(put)|(post)|(delete)|(options)|(head)|(patch)|(trace)':
                 'Operation',
-        }),
-        'Operation': defaultdict(bool, {
-            'parameters': defaultdict(bool, {
+        },
+        'Operation': {
+            'parameters': {
                 r'0-9+': 'Parameter',
-            }),
+            },
             'requestBody': 'RequestBody',
-            'responses': defaultdict(bool, {
+            'responses': {
                 r'(default)|([1-5][X0-9][X0-9])':
                     'Response',
-            }),
-            'callbacks': defaultdict(bool, {
+            },
+            'callbacks': {
                 r'.*': 'Callback',
-            }),
-        }),
-        'Parameter': defaultdict(bool, {
+            },
+        },
+        'Parameter': {
             'schema': True,
-            'content': defaultdict(bool, {
+            'content': {
                 r'.*': 'MediaType',
-            }),
-        }),
-        'Parameter': defaultdict(bool, {
+            },
+        },
+        'Parameter': {
             'schema': True,
             # Unclear if 'content' is relevant to headers, but doesn't hurt
-            'content': defaultdict(bool, {
+            'content': {
                 r'.*': 'MediaType',
-            }),
-        }),
-        'RequestBody': defaultdict(bool, {
-            'content': defaultdict(bool, {
+            },
+        },
+        'RequestBody': {
+            'content': {
                 r'.*': 'MedaiType',
-            }),
-        }),
-        'Response': defaultdict(bool, {
-            'headers': defaultdict(bool, {
+            },
+        },
+        'Response': {
+            'headers': {
                 r'.*': 'Header',
-            }),
-            'content': defaultdict(bool, {
+            },
+            'content': {
                 r'.*': 'MediaType',
-            }),
-        }),
-        'MediaType': defaultdict(bool, {
+            },
+        },
+        'MediaType': {
             'schema': True,
-            'encoding': defaultdict(bool, {
-                'headers': defaultdict(bool, {
+            'encoding': {
+                'headers': {
                     r'.*': 'Header',
-                }),
-            }),
-        }),
-        'Callback': defaultdict(bool, {
+                },
+            },
+        },
+        'Callback': {
             # Runtime expressions start with "$", extensions start with "x-"
             r'\$.*': 'PathItem',
-        }),
+        },
     })
 
 
@@ -613,6 +638,72 @@ class OASDocument(OASFormat):
         )
 
 
+class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
+    def __init__(
+        self,
+        value,
+        *args,
+        oasversion: Optional[str] = None,
+        catalog: Union[str, jschon.Catalog] = 'oascomply',
+        uri: Optional[URI] = None,
+        parent: Optional[jschon.JSON] = None,
+        metadocument_uri: Optional[URI] = None,
+        **kwargs,
+    ):
+        self._set_oasversion(
+            uri=uri,
+            parent=parent,
+            from_params=oasversion,
+        )
+        if metadocument_uri is None:
+            # TODO: handle 3.1 properly
+            metadocument_uri = \
+                URI(OAS_SCHEMA_INFO[self.oasversion]['dialect']['uri'])
+
+        self._url = None
+        self._sourcemap = None
+
+        super().__init__(
+            value,
+            *args,
+            uri=uri,
+            parent=parent,
+            catalog=catalog,
+            metaschema_uri=metadocument_uri,
+            **kwargs,
+        )
+
+    def is_format_root(self):
+        return (
+            self.parent is None or
+            not isinstance(self.parent, OASJSONSchema) or
+            self.is_resource_root() and '$schema' in self.data
+        )
+
+    @property
+    def oastype(self):
+        return 'Schema'
+
+    # TODO: should URLs only be document-scope? resource-scope?
+    #       URLs for embedded resources would be document root-relative...
+    #       Should the document root URL have an empty fragment or no fragment?
+    @property
+    def url(self):
+        return self._url
+
+    @url.setter
+    def url(self, url):
+        self._url = url
+
+    @property
+    def sourcemap(self):
+        return self._sourcemap
+
+    @sourcemap.setter
+    def sourcemap(self, sourcemap):
+        self._sourcemap = sourcemap
+
+
 class OASFragment(OASFormat):
     def __init__(
         self,
@@ -630,6 +721,7 @@ class OASFragment(OASFormat):
                 'that are overall document root nodes (without a parent)',
             )
 
+        self._oastype = oastype
         self._set_oasversion(
             uri=uri,
             parent=parent,
