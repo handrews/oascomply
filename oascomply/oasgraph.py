@@ -550,10 +550,15 @@ class OasGraph:
         m_uri = jschon.URI(OAS30_DIALECT_METASCHEMA)
         for sd in schema_data:
             if isinstance(sd, jschon.JSONSchema):
-                logger.debug(f'Found example validation schema <{sd.pointer_uri}?')
+                logger.debug(
+                    f'Found example validation schema <{sd.pointer_uri}?',
+                )
                 schemas.append(sd)
             elif isinstance(sd, OASNodeBase):
-                logger.warning(f'Expected OASJSONSchema at <{sd.pointer_uri}>, found {type(sd).__class__} instead!')
+                logger.warning(
+                    f'Expected OASJSONSchema at <{sd.pointer_uri}>, '
+                    f'found {type(sd).__name__} instead!',
+                )
                 schemas.append(
                     oascomply.catalog.get_schema(sd.uri, metaschema_uri=m_uri),
                 )
