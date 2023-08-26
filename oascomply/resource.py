@@ -201,14 +201,14 @@ class OASNodeBase:
         },
         'PathItem': {
             'parameters': {
-                r'0-9+': 'Parameter',
+                r'[0-9]+': 'Parameter',
             },
             r'(get)|(put)|(post)|(delete)|(options)|(head)|(patch)|(trace)':
                 'Operation',
         },
         'Operation': {
             'parameters': {
-                r'0-9+': 'Parameter',
+                r'[0-9]+': 'Parameter',
             },
             'requestBody': 'RequestBody',
             'responses': {
@@ -220,6 +220,12 @@ class OASNodeBase:
             },
         },
         'Parameter': {
+            'schema': True,
+            'content': {
+                r'.*': 'MediaType',
+            },
+        },
+        'Header': {
             'schema': True,
             'content': {
                 r'.*': 'MediaType',
@@ -341,14 +347,15 @@ class OASNodeBase:
             if isinstance(self, OASInternalNode):
                 retval = False
             else:
-                raise ValueError("oops, we're lost!")
+                raise ValueError("TODO: code needs refactoring, found unexpected class.")
         else:
             retval = False
             for k, v in self.schema_pointer.evaluate(
                 self._SCHEMA_LOCATIONS
             ).items():
+                logger.debug(f'Checking field name {field!r} against ^{k}$')
                 if re.fullmatch(k, field):
-                    logger.debug(f'Matched!')
+                    logger.debug(f'Check matched!')
                     if v is True:
                         retval = True
                     elif isinstance(v, OASType):
