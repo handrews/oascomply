@@ -170,6 +170,7 @@ class ApiDescription:
             else:
                 raise ValueError(f"Unexpected annotation {ann.keyword!r}")
         self._validated.append(resource_uri)
+        self._manager._catalog.resolve_references()
 
         for annot in ANNOT_ORDER:
             if annot == 'oasExamples':

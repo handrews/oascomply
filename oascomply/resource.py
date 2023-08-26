@@ -331,22 +331,32 @@ class OASNodeBase:
         self,
         field: str,
     ) -> Union[bool, jschon.JSONPointer]:
+        logger.debug(
+            f'Checking <{self.pointer_uri}> field {field!r} for schemas '
+            f'with pointer "{self.schema_pointer}"'
+        )
         if self.schema_pointer is None:
             # TODO: whoops, this is not good OO!
             if isinstance(self, OASInternalNode):
-                return False
+                retval = False
             else:
                 raise ValueError("oops, we're lost!")
-        for k, v in self.schema_pointer.evaluate(
-            self._SCHEMA_LOCATIONS
-        ).items():
-            if re.fullmatch(k, field):
-                if v is True:
-                    return True
-                elif isinstance(v, OASType):
-                    return (v, jschon.JSONPointer())
-                return (oastype, pointer / k)
-        return False
+        else:
+            retval = False
+            for k, v in self.schema_pointer.evaluate(
+                self._SCHEMA_LOCATIONS
+            ).items():
+                if re.fullmatch(k, field):
+                    logger.debug(f'Matched!')
+                    if v is True:
+                        retval = True
+                    elif isinstance(v, OASType):
+                        retval = jschon.JSONPointer([v])
+                    else:
+                        retval = self.schema_pointer / k
+                    break
+        logger.debug(f'Schema check yielded: "{retval!r}"')
+        return retval
 
     @property
     def oastype(self) -> Optional[OASType]:
@@ -442,7 +452,7 @@ class OASNodeBase:
                     parent=self,
                     key=k,
                     itemclass=self.itemclass,
-                    **self.itemkwargs,
+                    **newkwargs,
                 )
         return mapping
 
@@ -472,7 +482,7 @@ class OASNodeBase:
                     parent=self,
                     key=i_str,
                     itemclass=self.itemclass,
-                    **self.itemkwargs,
+                    **newkwargs,
                 ))
         return sequence
 
@@ -493,10 +503,9 @@ class OASInternalNode(JSONResource, OASNodeBase):
             raise ValueError(
                 "Class OASInternalNode cannot be a document root (without a parent)",
             )
-        logger.info(
-            f'Creating new {type(self).__name__} ({id(self)}), '
-            f'provided uri <{kwargs.get("uri")}>',
-        )
+        logger.info(f'Creating new {type(self).__name__} ({id(self)})...')
+        logger.info(f'...provided node uri <{kwargs.get("uri")}>')
+        logger.info(f'...provided schema locator "{schema_pointer}"')
 
         self._schema_pointer = schema_pointer
 
@@ -518,7 +527,8 @@ class OASInternalNode(JSONResource, OASNodeBase):
 
         logger.info(
             f'New {type(self).__name__} ({id(self)}) created: '
-            f'<{self.pointer_uri}>',
+            f'<{self.pointer_uri}> '
+            f'in {self.catalog}[{self.cacheid!r}]',
         )
 
     @cached_property
@@ -580,7 +590,10 @@ class OASFormat(JSONFormat, OASNodeBase):
             f'New {type(self).__name__} ({id(self)}) created: '
             f'<{self.pointer_uri}>...',
         )
-        logger.info(f'...metadocument <{self.metadocument_uri}>')
+        logger.info(
+            f'...metadocument <{self.metadocument_uri}> '
+            f'in {self.catalog}[{self.cacheid!r}]',
+        )
 
     def instantiate_mapping(self, value):
         return self.instantiate_mapping_with_schema_check(value)
@@ -742,6 +755,7 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
         logger.info(f'Creating new {type(self).__name__} ({id(self)})...')
         logger.info(f'...provided node uri <{kwargs.get("uri")}>')
         logger.info(f'...provided meta uri <{kwargs.get("metadocument_uri")}>')
+        logger.debug(f'...contents:\n\t{value}')
 
         self._set_oasversion(
             uri=uri,
@@ -770,7 +784,13 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             f'New {type(self).__name__} ({id(self)}) created: '
             f'<{self.pointer_uri}>...',
         )
-        logger.info(f'...metaschema <{self.metadocument_uri}>')
+        logger.info(
+            f'...metaschema <{self.metadocument_uri}> '
+            f'in {self.catalog}[{self.cacheid!r}]',
+        )
+
+    def get_subschema_cls(self):
+        return OASJSONSchema
 
     def is_format_root(self):
         return (
@@ -915,7 +935,8 @@ class OASContainer(JSONResource, OASNodeBase):
 
         logger.info(
             f'New {type(self).__name__} ({id(self)}) created: '
-            f'<{self.pointer_uri}>',
+            f'<{self.pointer_uri}> '
+            f'in {self.catalog}[{self.cacheid!r}]',
         )
 
     def instantiate_sequence(self, value):
@@ -1160,7 +1181,6 @@ class OASResourceManager:
         base_uri = uri.copy(fragment=None)
         r = self._catalog.get_resource(
             uri,
-            cacheid=oasversion,
             cls=OASNodeBase,
             factory=lambda *args, **kwargs: OASNodeBase.oas_factory(
                 *args, oastype=oastype, oasversion=oasversion, **kwargs
