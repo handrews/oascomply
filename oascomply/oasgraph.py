@@ -102,12 +102,6 @@ class OasGraph:
     :param version: The ``X.Y`` OAS version string for the description
     """
     def __init__(self, version: str, *, test_mode=False):
-
-        # TODO: This is better checked elsewhere
-        if version not in ('3.0', '3.1'):
-            raise ValueError(f'OAS v{version} is not supported.')
-        if version == '3.1':
-            raise ValueError(f'OAS v3.1 support TBD.')
         self._version = version
         self._test_mode = test_mode
 
