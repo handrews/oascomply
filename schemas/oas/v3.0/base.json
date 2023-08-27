@@ -95,14 +95,7 @@
         ]
       },
       "not": {
-        "oneOf": [
-          {
-            "$dynamicRef": "#meta"
-          },
-          {
-            "$ref": "#/$defs/Reference"
-          }
-        ],
+        "$dynamicRef": "#meta",
         "oasReferences": {
           "0/$ref": "Schema"
         }
@@ -110,14 +103,7 @@
       "allOf": {
         "type": "array",
         "items": {
-          "oneOf": [
-            {
-              "$dynamicRef": "#meta"
-            },
-            {
-              "$ref": "#/$defs/Reference"
-            }
-          ],
+          "$dynamicRef": "#meta",
           "oasReferences": {
             "0/$ref": "Schema"
           }
@@ -126,14 +112,7 @@
       "oneOf": {
         "type": "array",
         "items": {
-          "oneOf": [
-            {
-              "$dynamicRef": "#meta"
-            },
-            {
-              "$ref": "#/$defs/Reference"
-            }
-          ],
+          "$dynamicRef": "#meta",
           "oasReferences": {
             "0/$ref": "Schema"
           }
@@ -142,28 +121,14 @@
       "anyOf": {
         "type": "array",
         "items": {
-          "oneOf": [
-            {
-              "$dynamicRef": "#meta"
-            },
-            {
-              "$ref": "#/$defs/Reference"
-            }
-          ],
+          "$dynamicRef": "#meta",
           "oasReferences": {
             "0/$ref": "Schema"
           }
         }
       },
       "items": {
-        "oneOf": [
-          {
-            "$dynamicRef": "#meta"
-          },
-          {
-            "$ref": "#/$defs/Reference"
-          }
-        ],
+        "$dynamicRef": "#meta",
         "oasReferences": {
           "0/$ref": "Schema"
         }
@@ -171,14 +136,7 @@
       "properties": {
         "type": "object",
         "additionalProperties": {
-          "oneOf": [
-            {
-              "$dynamicRef": "#meta"
-            },
-            {
-              "$ref": "#/$defs/Reference"
-            }
-          ],
+          "$dynamicRef": "#meta",
           "oasReferences": {
             "0/$ref": "Schema"
           }
@@ -188,9 +146,6 @@
         "oneOf": [
           {
             "$dynamicRef": "#meta"
-          },
-          {
-            "$ref": "#/$defs/Reference"
           },
           {
             "type": "boolean"
