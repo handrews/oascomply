@@ -1417,16 +1417,16 @@ class OASResourceManager:
 
         return None if uri is None else self.get_oas(uri, oasversion=oasversion)
 
-    def get_preload_resources(self, oasversion):
+    def preload_resources(self, oasversion):
         for resource in chain(self._adjusted_files, self._adjusted_urls):
             if resource.oastype is not None:
-                yield (
-                    self.get_oas(
-                        resource.uri,
-                        oasversion=oasversion,
-                        oastype=resource.oastype,
-                    ),
-                    resource.oastype
+                oas_doc = self.get_oas(
+                    resource.uri,
+                    oasversion=oasversion,
+                    oastype=resource.oastype,
+                )
+                logger.debug(
+                    f'Pre-loaded <{oas_doc.uri}>, type {resource.oastype!r}',
                 )
 
     def get_oas(

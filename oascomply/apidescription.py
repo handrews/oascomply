@@ -141,15 +141,9 @@ class ApiDescription:
 
         self._g.add_resource(document.url, document.uri)
 
-        parser_output = []
+        self._manager.preload_resources(self._primary_resource.oasversion)
         try:
-            parser_output.append(sp.parse(resource, oastype))
-            if resource.uri == self._primary_resource.uri:
-                for pre, pre_oastype in self._manager.get_preload_resources(
-                    self.oasversion,
-                ):
-                    parser_output.append(sp.parse(pre, pre_oastype))
-
+            output = sp.parse(resource, oastype)
         except JsonSchemaParseError as e:
             errors.append({
                 'location': str(resource.pointer_uri),
@@ -159,47 +153,45 @@ class ApiDescription:
             return errors
 
         to_validate = {}
+        by_method = defaultdict(list)
+        for unit in output['annotations']:
+            ann=Annotation(
+                unit,
+                instance_base=resource_uri.copy(fragment=None),
+            )
+            method = f'add_{ann.keyword.lower()}'
 
-        for output in parser_output:
-            by_method = defaultdict(list)
-            for unit in output['annotations']:
-                ann=Annotation(
-                    unit,
-                    instance_base=resource_uri.copy(fragment=None),
-                )
-                method = f'add_{ann.keyword.lower()}'
+            # Using a try/except here can result in confusion if something
+            # else produces an AttributeError, so use hasattr()
+            if hasattr(self._g, method):
+                by_method[method].append((ann, document, resource, sourcemap))
+            else:
+                raise ValueError(f"Unexpected annotation {ann.keyword!r}")
+        self._validated.append(resource_uri)
+        self._manager._catalog.resolve_references()
 
-                # Using a try/except here can result in confusion if something
-                # else produces an AttributeError, so use hasattr()
-                if hasattr(self._g, method):
-                    by_method[method].append((ann, document, resource, sourcemap))
-                else:
-                    raise ValueError(f"Unexpected annotation {ann.keyword!r}")
-            self._validated.append(resource_uri)
-            self._manager._catalog.resolve_references()
+        for annot in ANNOT_ORDER:
+            if annot == 'oasExamples':
+                # By this point we have set up the necessary reference info
+                for uri, oastype in to_validate.items():
+                    if uri not in self._validated:
+                        errors.extend(self.validate(
+                            uri,
+                            oastype,
+                            validate_examples=validate_examples,
+                        ))
+                if not validate_examples:
+                    logger.info('Skipping example validation')
+                    continue
 
-            for annot in ANNOT_ORDER:
-                if annot == 'oasExamples':
-                    # By this point we have set up the necessary reference info
-                    for uri, oastype in to_validate.items():
-                        if uri not in self._validated:
-                            errors.extend(self.validate(
-                                uri,
-                                oastype,
-                                validate_examples=validate_examples,
-                            ))
-                    if not validate_examples:
-                        logger.info('Skipping example validation')
-                        continue
-
-                method_name = f'add_{annot.lower()}'
-                method_callable = getattr(self._g, method_name)
-                for args in by_method[method_name]:
-                    graph_result = method_callable(*args)
-                    for err in graph_result.errors:
-                        errors.append(err)
-                    for uri, oastype in graph_result.refTargets:
-                        to_validate[uri] = oastype
+            method_name = f'add_{annot.lower()}'
+            method_callable = getattr(self._g, method_name)
+            for args in by_method[method_name]:
+                graph_result = method_callable(*args)
+                for err in graph_result.errors:
+                    errors.append(err)
+                for uri, oastype in graph_result.refTargets:
+                    to_validate[uri] = oastype
 
         return errors
 
