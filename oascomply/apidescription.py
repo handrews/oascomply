@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
 from typing import (
-    Any, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
+    Any, ClassVar, Iterator, Mapping, Optional, Sequence, Tuple, Type, Union
 )
 import logging
 
@@ -53,6 +53,10 @@ class ApiDescription:
         testing by removing environment-specific information such as file names
     """
 
+    # TODO: Remove this egregious hack, and re-read
+    #       Yegge's "Singleton Considered Stupid" for pennance/entertainment.
+    singleton_m2_hack: ClassVar = None
+
     def __init__(
         self,
         document,
@@ -60,6 +64,7 @@ class ApiDescription:
         resource_manager: OASResourceManager,
         test_mode: bool = False,
     ) -> None:
+        type(self).singleton_m2_hack = self
 
         # TODO: "entry" vs "primary"
         self._primary_resource = document

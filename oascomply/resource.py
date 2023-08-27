@@ -867,12 +867,26 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             )
 
         if metadocument_uri is None:
-            # TODO: handle 3.1 properly
-            metadocument_uri = (
-                URI(OAS_SCHEMA_INFO[self.oasversion]['dialect']['uri'])
-                if metaschema_uri is None
-                else metaschema_uri
-            )
+            from oascomply.apidescription import ApiDescription
+            # TODO: Remove incredibly egregious hack
+
+            if metaschema_uri is not None:
+                metadocument_uri = metaschema_uri
+            elif (
+                self.oasversion == '3.1' and
+                'jsonSchemaDialect' in
+                    ApiDescription.singleton_m2_hack._primary_resource
+            ):
+                metadocument_uri = URI(
+                    ApiDescription.singleton_m2_hack._primary_resource[
+                        'jsonSchemaDialect'
+                    ],
+                )
+            else:
+                metadocument_uri = (
+                    URI(OAS_SCHEMA_INFO[self.oasversion]['dialect']['uri'])
+                )
+
         kwargs['metaschema_uri'] = metadocument_uri
 
         self._url = None
