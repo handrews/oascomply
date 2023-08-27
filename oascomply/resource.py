@@ -1100,8 +1100,6 @@ class OASContainer(JSONResource, OASNodeBase):
                         v,
                         parent=self,
                         key=k,
-                        catalog=self.catalog,
-                        cacheid=self.cacheid,
                         **newkwargs,
                     )
                 else:
@@ -1110,8 +1108,6 @@ class OASContainer(JSONResource, OASNodeBase):
                         oastype=self._fragment_fields[k],
                         parent=self,
                         key=k,
-                        catalog=self.catalog,
-                        cacheid=self.cacheid,
                         **newkwargs,
                     )
             elif k in self._document_fields:
