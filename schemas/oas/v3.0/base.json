@@ -9,103 +9,152 @@
   },
   "$dynamicAnchor": "meta",
   "type": "object",
-  "properties": {
-    "title": {
-      "type": "string"
-    },
-    "multipleOf": {
-      "type": "number",
-      "exclusiveMinimum": 0
-    },
-    "maximum": {
-      "type": "number"
-    },
-    "exclusiveMaximum": {
-      "type": "boolean",
-      "default": false
-    },
-    "minimum": {
-      "type": "number"
-    },
-    "exclusiveMinimum": {
-      "type": "boolean",
-      "default": false
-    },
-    "maxLength": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "minLength": {
-      "type": "integer",
-      "minimum": 0,
-      "default": 0
-    },
-    "pattern": {
-      "type": "string",
-      "format": "regex"
-    },
-    "maxItems": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "minItems": {
-      "type": "integer",
-      "minimum": 0,
-      "default": 0
-    },
-    "uniqueItems": {
-      "type": "boolean",
-      "default": false
-    },
-    "maxProperties": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "minProperties": {
-      "type": "integer",
-      "minimum": 0,
-      "default": 0
-    },
-    "required": {
-      "type": "array",
-      "items": {
+  "anyOf": [{
+    "$ref": "#/$defs/Reference"
+   }, {
+    "properties": {
+      "title": {
         "type": "string"
       },
-      "minItems": 1,
-      "uniqueItems": true
-    },
-    "enum": {
-      "type": "array",
-      "items": true,
-      "minItems": 1,
-      "uniqueItems": false
-    },
-    "type": {
-      "type": "string",
-      "enum": [
-        "array",
-        "boolean",
-        "integer",
-        "number",
-        "object",
-        "string"
-      ]
-    },
-    "not": {
-      "oneOf": [
-        {
-          "$dynamicRef": "#meta"
+      "multipleOf": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "maximum": {
+        "type": "number"
+      },
+      "exclusiveMaximum": {
+        "type": "boolean",
+        "default": false
+      },
+      "minimum": {
+        "type": "number"
+      },
+      "exclusiveMinimum": {
+        "type": "boolean",
+        "default": false
+      },
+      "maxLength": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minLength": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      },
+      "pattern": {
+        "type": "string",
+        "format": "regex"
+      },
+      "maxItems": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      },
+      "uniqueItems": {
+        "type": "boolean",
+        "default": false
+      },
+      "maxProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minProperties": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0
+      },
+      "required": {
+        "type": "array",
+        "items": {
+          "type": "string"
         },
-        {
-          "$ref": "#/$defs/Reference"
+        "minItems": 1,
+        "uniqueItems": true
+      },
+      "enum": {
+        "type": "array",
+        "items": true,
+        "minItems": 1,
+        "uniqueItems": false
+      },
+      "type": {
+        "type": "string",
+        "enum": [
+          "array",
+          "boolean",
+          "integer",
+          "number",
+          "object",
+          "string"
+        ]
+      },
+      "not": {
+        "oneOf": [
+          {
+            "$dynamicRef": "#meta"
+          },
+          {
+            "$ref": "#/$defs/Reference"
+          }
+        ],
+        "oasReferences": {
+          "0/$ref": "Schema"
         }
-      ],
-      "oasReferences": {
-        "0/$ref": "Schema"
-      }
-    },
-    "allOf": {
-      "type": "array",
+      },
+      "allOf": {
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "$dynamicRef": "#meta"
+            },
+            {
+              "$ref": "#/$defs/Reference"
+            }
+          ],
+          "oasReferences": {
+            "0/$ref": "Schema"
+          }
+        }
+      },
+      "oneOf": {
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "$dynamicRef": "#meta"
+            },
+            {
+              "$ref": "#/$defs/Reference"
+            }
+          ],
+          "oasReferences": {
+            "0/$ref": "Schema"
+          }
+        }
+      },
+      "anyOf": {
+        "type": "array",
+        "items": {
+          "oneOf": [
+            {
+              "$dynamicRef": "#meta"
+            },
+            {
+              "$ref": "#/$defs/Reference"
+            }
+          ],
+          "oasReferences": {
+            "0/$ref": "Schema"
+          }
+        }
+      },
       "items": {
         "oneOf": [
           {
@@ -118,55 +167,23 @@
         "oasReferences": {
           "0/$ref": "Schema"
         }
-      }
-    },
-    "oneOf": {
-      "type": "array",
-      "items": {
-        "oneOf": [
-          {
-            "$dynamicRef": "#meta"
-          },
-          {
-            "$ref": "#/$defs/Reference"
+      },
+      "properties": {
+        "type": "object",
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "$dynamicRef": "#meta"
+            },
+            {
+              "$ref": "#/$defs/Reference"
+            }
+          ],
+          "oasReferences": {
+            "0/$ref": "Schema"
           }
-        ],
-        "oasReferences": {
-          "0/$ref": "Schema"
         }
-      }
-    },
-    "anyOf": {
-      "type": "array",
-      "items": {
-        "oneOf": [
-          {
-            "$dynamicRef": "#meta"
-          },
-          {
-            "$ref": "#/$defs/Reference"
-          }
-        ],
-        "oasReferences": {
-          "0/$ref": "Schema"
-        }
-      }
-    },
-    "items": {
-      "oneOf": [
-        {
-          "$dynamicRef": "#meta"
-        },
-        {
-          "$ref": "#/$defs/Reference"
-        }
-      ],
-      "oasReferences": {
-        "0/$ref": "Schema"
-      }
-    },
-    "properties": {
-      "type": "object",
+      },
       "additionalProperties": {
         "oneOf": [
           {
@@ -174,115 +191,102 @@
           },
           {
             "$ref": "#/$defs/Reference"
+          },
+          {
+            "type": "boolean"
           }
         ],
+        "default": true,
         "oasReferences": {
           "0/$ref": "Schema"
         }
-      }
-    },
-    "additionalProperties": {
-      "oneOf": [
-        {
-          "$dynamicRef": "#meta"
-        },
-        {
-          "$ref": "#/$defs/Reference"
-        },
-        {
-          "type": "boolean"
-        }
-      ],
+      },
+      "description": {
+        "type": "string",
+        "format": "commonmark"
+      },
+      "format": {
+        "type": "string"
+      },
       "default": true,
-      "oasReferences": {
-        "0/$ref": "Schema"
+      "nullable": {
+        "type": "boolean",
+        "default": false
+      },
+      "discriminator": {
+        "$ref": "#/$defs/Discriminator"
+      },
+      "readOnly": {
+        "type": "boolean",
+        "default": false
+      },
+      "writeOnly": {
+        "type": "boolean",
+        "default": false
+      },
+      "example": true,
+      "externalDocs": {
+        "$ref": "#/$defs/ExternalDocumentation"
+      },
+      "deprecated": {
+        "type": "boolean",
+        "default": false
+      },
+      "xml": {
+        "$ref": "#/$defs/XML"
       }
     },
-    "description": {
-      "type": "string",
-      "format": "commonmark"
+    "patternProperties": {
+      "^x-": true
     },
-    "format": {
-      "type": "string"
+    "additionalProperties": false,
+    "oasType": "Schema",
+    "oasChildren": {
+      "0/allOf/{index}": "schemaAllOf",
+      "0/anyOf/{index}": "schemaAnyOf",
+      "0/oneOf/{index}": "schemaOneOf",
+      "0/not": "schemaNot",
+      "0/properties/{name}": "schemaProperty",
+      "0/additionalProperties": "schemaAdditionalProperties",
+      "0/items": "schemaItems",
+      "0/xml": "xmlSerialization",
+      "0/discriminator": "discriminator",
+      "0/externalDocs": "externalDocs"
     },
-    "default": true,
-    "nullable": {
-      "type": "boolean",
-      "default": false
+    "oasLiterals": {
+      "0/type": "schemaType",
+      "0/enum": "schemaEnum",
+      "0/maximum": "schemaMaximum",
+      "0/minimum": "schemaMinimum",
+      "0/exclusiveMaximum": "schemaExclusiveMaximum",
+      "0/exclusiveMinimum": "schemaExclusiveMinimum",
+      "0/multipleOf": "schemaMultipleOf",
+      "0/maxLength": "schemaMaxLength",
+      "0/minLength": "schemaMinLength",
+      "0/pattern": "schemaPattern",
+      "0/maxItems": "schemaMaxItems",
+      "0/minItems": "schemaMinItems",
+      "0/uniqueItems": "schemaUniqueItems",
+      "0/maxProperties": "schemaMaxProperties",
+      "0/minProperties": "schemaMinProperties",
+      "0/required": "schemaRequired",
+      "0/title": "schemaTitle",
+      "0/description": "schemaDescription",
+      "0/format": "schemaFormat",
+      "0/default": "schemaDefault",
+      "0/readOnly": "schemaReadOnly",
+      "0/writeOnly": "schemaWriteOnly",
+      "0/deprecated": "schemaDeprecated",
+      "0/nullable": "schemaNullable"
     },
-    "discriminator": {
-      "$ref": "#/$defs/Discriminator"
+    "oasExamples": {
+      "examples": [
+        "0/example",
+        "0/default"
+      ]
     },
-    "readOnly": {
-      "type": "boolean",
-      "default": false
-    },
-    "writeOnly": {
-      "type": "boolean",
-      "default": false
-    },
-    "example": true,
-    "externalDocs": {
-      "$ref": "#/$defs/ExternalDocumentation"
-    },
-    "deprecated": {
-      "type": "boolean",
-      "default": false
-    },
-    "xml": {
-      "$ref": "#/$defs/XML"
-    }
-  },
-  "patternProperties": {
-    "^x-": true
-  },
-  "additionalProperties": false,
-  "oasType": "Schema",
-  "oasChildren": {
-    "0/allOf/{index}": "schemaAllOf",
-    "0/anyOf/{index}": "schemaAnyOf",
-    "0/oneOf/{index}": "schemaOneOf",
-    "0/not": "schemaNot",
-    "0/properties/{name}": "schemaProperty",
-    "0/additionalProperties": "schemaAdditionalProperties",
-    "0/items": "schemaItems",
-    "0/xml": "xmlSerialization",
-    "0/discriminator": "discriminator",
-    "0/externalDocs": "externalDocs"
-  },
-  "oasLiterals": {
-    "0/type": "schemaType",
-    "0/enum": "schemaEnum",
-    "0/maximum": "schemaMaximum",
-    "0/minimum": "schemaMinimum",
-    "0/exclusiveMaximum": "schemaExclusiveMaximum",
-    "0/exclusiveMinimum": "schemaExclusiveMinimum",
-    "0/multipleOf": "schemaMultipleOf",
-    "0/maxLength": "schemaMaxLength",
-    "0/minLength": "schemaMinLength",
-    "0/pattern": "schemaPattern",
-    "0/maxItems": "schemaMaxItems",
-    "0/minItems": "schemaMinItems",
-    "0/uniqueItems": "schemaUniqueItems",
-    "0/maxProperties": "schemaMaxProperties",
-    "0/minProperties": "schemaMinProperties",
-    "0/required": "schemaRequired",
-    "0/title": "schemaTitle",
-    "0/description": "schemaDescription",
-    "0/format": "schemaFormat",
-    "0/default": "schemaDefault",
-    "0/readOnly": "schemaReadOnly",
-    "0/writeOnly": "schemaWriteOnly",
-    "0/deprecated": "schemaDeprecated",
-    "0/nullable": "schemaNullable"
-  },
-  "oasExamples": {
-    "examples": [
-      "0/example",
-      "0/default"
-    ]
-  },
-  "oasExtensible": true,
+    "oasExtensible": true
+  }],
   "$defs": {
     "ExternalDocumentation": {
       "type": "object",
