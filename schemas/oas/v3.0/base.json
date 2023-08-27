@@ -99,7 +99,10 @@
         {
           "$ref": "#/$defs/Reference"
         }
-      ]
+      ],
+      "oasReferences": {
+        "0/$ref": "Schema"
+      }
     },
     "allOf": {
       "type": "array",
@@ -111,7 +114,10 @@
           {
             "$ref": "#/$defs/Reference"
           }
-        ]
+        ],
+        "oasReferences": {
+          "0/$ref": "Schema"
+        }
       }
     },
     "oneOf": {
@@ -124,7 +130,10 @@
           {
             "$ref": "#/$defs/Reference"
           }
-        ]
+        ],
+        "oasReferences": {
+          "0/$ref": "Schema"
+        }
       }
     },
     "anyOf": {
@@ -137,7 +146,10 @@
           {
             "$ref": "#/$defs/Reference"
           }
-        ]
+        ],
+        "oasReferences": {
+          "0/$ref": "Schema"
+        }
       }
     },
     "items": {
@@ -148,7 +160,10 @@
         {
           "$ref": "#/$defs/Reference"
         }
-      ]
+      ],
+      "oasReferences": {
+        "0/$ref": "Schema"
+      }
     },
     "properties": {
       "type": "object",
@@ -160,7 +175,10 @@
           {
             "$ref": "#/$defs/Reference"
           }
-        ]
+        ],
+        "oasReferences": {
+          "0/$ref": "Schema"
+        }
       }
     },
     "additionalProperties": {
@@ -175,7 +193,10 @@
           "type": "boolean"
         }
       ],
-      "default": true
+      "default": true,
+      "oasReferences": {
+        "0/$ref": "Schema"
+      }
     },
     "description": {
       "type": "string",
@@ -216,6 +237,52 @@
     "^x-": true
   },
   "additionalProperties": false,
+  "oasType": "Schema",
+  "oasChildren": {
+    "0/allOf/{index}": "schemaAllOf",
+    "0/anyOf/{index}": "schemaAnyOf",
+    "0/oneOf/{index}": "schemaOneOf",
+    "0/not": "schemaNot",
+    "0/properties/{name}": "schemaProperty",
+    "0/additionalProperties": "schemaAdditionalProperties",
+    "0/items": "schemaItems",
+    "0/xml": "xmlSerialization",
+    "0/discriminator": "discriminator",
+    "0/externalDocs": "externalDocs"
+  },
+  "oasLiterals": {
+    "0/type": "schemaType",
+    "0/enum": "schemaEnum",
+    "0/maximum": "schemaMaximum",
+    "0/minimum": "schemaMinimum",
+    "0/exclusiveMaximum": "schemaExclusiveMaximum",
+    "0/exclusiveMinimum": "schemaExclusiveMinimum",
+    "0/multipleOf": "schemaMultipleOf",
+    "0/maxLength": "schemaMaxLength",
+    "0/minLength": "schemaMinLength",
+    "0/pattern": "schemaPattern",
+    "0/maxItems": "schemaMaxItems",
+    "0/minItems": "schemaMinItems",
+    "0/uniqueItems": "schemaUniqueItems",
+    "0/maxProperties": "schemaMaxProperties",
+    "0/minProperties": "schemaMinProperties",
+    "0/required": "schemaRequired",
+    "0/title": "schemaTitle",
+    "0/description": "schemaDescription",
+    "0/format": "schemaFormat",
+    "0/default": "schemaDefault",
+    "0/readOnly": "schemaReadOnly",
+    "0/writeOnly": "schemaWriteOnly",
+    "0/deprecated": "schemaDeprecated",
+    "0/nullable": "schemaNullable"
+  },
+  "oasExamples": {
+    "examples": [
+      "0/example",
+      "0/default"
+    ]
+  },
+  "oasExtensible": true,
   "$defs": {
     "ExternalDocumentation": {
       "type": "object",
@@ -235,7 +302,15 @@
       "patternProperties": {
         "^x-": true
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oasType": "ExternalDocumentation",
+      "oasLiterals": {
+        "0/description": "0#"
+      },
+      "oasDescriptionLinks": {
+        "0/url": "0#"
+      },
+      "oasExtensible": true
     },
     "Discriminator": {
       "type": "object",
@@ -249,8 +324,18 @@
         "mapping": {
           "type": "object",
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "oasValues": {
+              "mappingName": "0#",
+              "mappingTarget": "0"
+            }
           }
+        }
+      },
+      "oasType": "Discriminator",
+      "oasImplicitReferences": {
+        "0/propertyName": {
+          "oasTargetType": "Schema"
         }
       }
     },
@@ -259,12 +344,13 @@
       "required": [
         "$ref"
       ],
-      "properties": {
-        "$ref": {
+      "patternProperties": {
+        "^\\$ref$": {
           "type": "string",
           "format": "uri-reference"
         }
-      }
+      },
+      "oasType": "Reference"
     },
     "XML": {
       "type": "object",
@@ -291,7 +377,16 @@
       "patternProperties": {
         "^x-": true
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oasType": "Xml",
+      "oasLiterals": {
+        "0/name": "0#",
+        "0/namespace": "xmlNamespace",
+        "0/prefix": "xmlPrefix",
+        "0/attribute": "xmlAttribute",
+        "0/wrapped": "0#"
+      },
+      "oasExtensible": true
     }
   }
 }
