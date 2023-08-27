@@ -510,8 +510,8 @@ class OASNodeBase:
     def instantiate_mapping_with_schema_check(self, value):
         mapping = {}
         for k, v in value.items():
-            s = self.check_for_schema(k)
-            if s is True:
+            is_schema = self.check_for_schema(k)
+            if is_schema is True:
                 mapping[k] = OASJSONSchema(
                     v,
                     parent=self,
@@ -523,8 +523,8 @@ class OASNodeBase:
                 )
             else:
                 newkwargs = self.itemkwargs.copy()
-                if s is not False:
-                    newkwargs['schema_pointer'] = s
+                if is_schema is not False:
+                    newkwargs['schema_pointer'] = is_schema
                 mapping[k] = OASInternalNode(
                     v,
                     parent=self,
@@ -538,11 +538,11 @@ class OASNodeBase:
         sequence = []
         for i, v in enumerate(value):
             i_str = str(i)
-            s = self.check_for_schema(i_str)
+            is_schema = self.check_for_schema(i_str)
 
             # Currently there are no arrays of schemas where this
             # happens, but it could be part of an extension keyword
-            if s is True:
+            if is_schema is True:
                 sequence.append(OASJSONSchema(
                     v,
                     parent=self,
@@ -554,8 +554,8 @@ class OASNodeBase:
                 ))
             else:
                 newkwargs = self.itemkwargs.copy()
-                if s is not False:
-                    newkwargs['schema_pointer'] = s
+                if is_schema is not False:
+                    newkwargs['schema_pointer'] = is_schema
                 sequence.append(OASInternalNode(
                     v,
                     parent=self,
@@ -669,7 +669,8 @@ class OASFormat(JSONFormat, OASNodeBase):
             *args,
             uri=uri,
             catalog=catalog,
-            **kwargs)
+            **kwargs,
+        )
 
         logger.info(
             f'New {type(self).__name__} ({id(self)}) created: '
@@ -867,21 +868,14 @@ class OASJSONSchema(jschon.JSONSchema, OASNodeBase):
             )
 
         if metadocument_uri is None:
-            from oascomply.apidescription import ApiDescription
             # TODO: Remove incredibly egregious hack
+            from oascomply.apidescription import ApiDescription
+            hack = ApiDescription.singleton_m2_hack
 
             if metaschema_uri is not None:
                 metadocument_uri = metaschema_uri
-            elif (
-                self.oasversion == '3.1' and
-                'jsonSchemaDialect' in
-                    ApiDescription.singleton_m2_hack._primary_resource
-            ):
-                metadocument_uri = URI(
-                    ApiDescription.singleton_m2_hack._primary_resource[
-                        'jsonSchemaDialect'
-                    ],
-                )
+            elif self.oasversion == '3.1' and hack is not None:
+                metadocument_uri = URI(hack)
             else:
                 metadocument_uri = (
                     URI(OAS_SCHEMA_INFO[self.oasversion]['dialect']['uri'])

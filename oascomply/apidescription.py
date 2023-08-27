@@ -64,8 +64,6 @@ class ApiDescription:
         resource_manager: OASResourceManager,
         test_mode: bool = False,
     ) -> None:
-        type(self).singleton_m2_hack = self
-
         # TODO: "entry" vs "primary"
         self._primary_resource = document
         self._manager = resource_manager
@@ -76,6 +74,9 @@ class ApiDescription:
                 "Initial API description must include `openapi` field!"
                 f"{path} <{uri}>"
             )
+
+        if document['openapi'].value.startswith('3.1.'):
+            type(self).singleton_m2_hack = document.get('jsonSchemaDialect')
 
         if (
             document.uri.path and '/' in document.uri.path and
