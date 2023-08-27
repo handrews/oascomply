@@ -354,7 +354,10 @@
           "format": "uri-reference"
         }
       },
-      "oasType": "Reference"
+      "oasType": "Reference",
+      "oasReferences": {
+        "0/$ref": "Schema"
+      }
     },
     "XML": {
       "type": "object",
