@@ -144,13 +144,19 @@ class ApiDescription:
 
         self._manager.preload_resources(self._primary_resource.oasversion)
         try:
+            logger.info(f'Parsing <{resource.pointer_uri}> ({oastype})')
             output = sp.parse(resource, oastype)
+            if 'error' in output:
+                logger.error(f'Error in <{resource.pointer_uri}> ({oastype}) schema validation:\n{output}')
+            else:
+                logger.info(f'Parsed <{resource.pointer_uri}> ({oastype})')
         except JsonSchemaParseError as e:
             errors.append({
                 'location': str(resource.pointer_uri),
                 'stage': 'JSON Schema validation',
                 'error': e.error_detail,
             })
+            logger.error(f'ERROR parsing <{resource.pointer_uri}> ({oastype})\n{errors[-1]}')
             return errors
 
         to_validate = {}

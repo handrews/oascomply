@@ -686,6 +686,9 @@ class OASFormat(JSONFormat, OASNodeBase):
     def instantiate_sequence(self, value):
         return self.instantiate_sequence_with_schema_check(value)
 
+    def get_metadocument_cls(self):
+        return jschon.JSONSchema
+
     def is_format_root(self) -> bool:
         return self.parent is None or not isinstance(self.parent, OASFormat)
 
