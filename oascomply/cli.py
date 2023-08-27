@@ -176,7 +176,7 @@ class ActionAppendThingToURI(argparse.Action):
         )
 
 
-def parse_logging() -> Sequence[str]:
+def parse_logging(args) -> Sequence[str]:
     """
     Parse logging options and configure logging before parsing everything else.
 
@@ -186,7 +186,7 @@ def parse_logging() -> Sequence[str]:
     """
     verbosity_parser = argparse.ArgumentParser(add_help=False)
     _add_verbose_option(verbosity_parser)
-    v_args, remaining_args = verbosity_parser.parse_known_args()
+    v_args, remaining_args = verbosity_parser.parse_known_args(args)
 
     oascomply_logger = logging.getLogger('oascomply')
     if v_args.verbose:
@@ -388,8 +388,8 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     return args
 
 
-def load():
-    remaining_args = parse_logging()
+def load(initial_args=sys.argv[1:]):
+    remaining_args = parse_logging(initial_args)
     args = parse_non_logging(remaining_args)
     manager = OASResourceManager(
         oascomply.catalog,
