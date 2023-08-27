@@ -203,19 +203,6 @@ class JschonSchemaParser(SchemaParser):
     def __init__(self, config, annotations=()):
         super().__init__(config, annotations)
         self._filtered = True
-        with open(
-            Path(__file__).parent /
-                '..' /
-                'schemas' /
-                'oas' /
-                'v3.0' /
-                'schema.json',
-            encoding='utf-8',
-        ) as schema_fp:
-            self._v30_schema = jschon.JSONSchema(
-                json.load(schema_fp),
-                catalog='oascomply',
-            )
         self._result_cache = {}
 
     def parse(self, document, oastype, output_format='basic'):
@@ -231,24 +218,14 @@ class JschonSchemaParser(SchemaParser):
             )
             return self._result_cache[document.oas_root.pointer_uri]
 
-        old_schema = self._v30_schema
-        if oastype != 'OpenAPI':
-            try:
-                # TODO: This probably won't work for 3.1
-                old_schema = old_schema['$defs'][oastype]
-            except KeyError:
-                pass
-                # TODO: Better error handling
-                raise
-
         # auto-creating non-Metaschema metadocuments requires
         # more work, so for now evaluate this as a "normal" schema
         # result = document.validate()
         schema = document.catalog.get_schema(document.oas_root.metadocument_uri)
-        if old_schema.pointer_uri != schema.pointer_uri:
-            logger.critical(f"old schema <{old_schema.pointer_uri}>, new schema <{schema.pointer_uri}> for <{document.pointer_uri}>")
-        else:
-            logger.info(f"old and new schemsa agree for <{document.pointer_uri}>")
+        logger.info(
+            f'Validating <{document.oas_root.pointer_uri}> '
+            f'against <{schema.pointer_uri}>',
+        )
         schema.resolve_references()
         result = schema.evaluate(document.oas_root)
         if not result.valid:
