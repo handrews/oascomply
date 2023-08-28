@@ -1,0 +1,11 @@
+{
+    "type": ["string", "null"],
+    "example": null,
+    "default": "four",
+    "$ref": "#/$defs/limit",
+    "$defs": {
+        "limit": {
+            "maxLength": 3
+        }
+    }
+}
