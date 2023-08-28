@@ -158,7 +158,8 @@ class Location:
     @cached_property
     def schema_uri(self) -> jschon.URI:
         s_uri = jschon.URI(self._unit['absoluteKeywordLocation'])
-        return s_uri.copy(fragment=s_uri.fragment_ptr[:-1].uri_fragment())
+        ptr = jschon.JSONPointer.parse_uri_fragment(s_uri.fragment)
+        return s_uri.copy(fragment=ptr[:-1].uri_fragment())
 
 
 class SchemaParser:
