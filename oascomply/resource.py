@@ -213,7 +213,7 @@ class OASNodeBase:
             },
             'requestBody': 'RequestBody',
             'responses': {
-                r'(default)|([1-5][X0-9][X0-9])':
+                r'(default)|([1-5](([0-9][0-9])|(XX)))':
                     'Response',
             },
             'callbacks': {
