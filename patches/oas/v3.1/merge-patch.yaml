@@ -130,6 +130,10 @@ $defs:
         oasType: SchemaComponents
         oasChildren:
             0/{name}: namedSchema
+        type: null  # Allow boolean schemas
+        additionalProperties:
+            $dynamicRef: null
+            $ref: "#/$defs/schema"
       securitySchemes:
         oasType: SecuritySchemeComponents
         oasChildren:
@@ -198,6 +202,9 @@ $defs:
     properties:
       description:
         format: commonmark
+      schema:
+        $dynamicRef: null
+        $ref: "#/$defs/schema"
 
   info:
     oasType: Info
@@ -260,6 +267,10 @@ $defs:
         - 0/schema
       encodings:
         - 0/encoding/{property}
+    properties:
+      schema:
+        $dynamicRef: null
+        $ref: "#/$defs/schema"
 
   oauth-flows:
     oasType: OAuthFlows
@@ -373,6 +384,9 @@ $defs:
     properties:
       description:
         format: commonmark
+      schema:
+        $dynamicRef: null
+        $ref: "#/$defs/schema"
     $defs:
       styles-for-path:
         then:
@@ -494,8 +508,8 @@ $defs:
       0/{statusSpecification}: response
 
   schema:
-    # See dialect meta-schema for details
-    oasType: Schema
+    $dynamicAnchor: null
+    $ref: https://spec.openapis.org/oas/3.1/dialect/strict
 
   security-requirement:
     oasType: SecurityRequirement
