@@ -22,6 +22,23 @@
       "$ref": "https://spec.openapis.org/oas/3.1/meta/base"
     }
   ],
+  "if": {
+    "anyOf": [
+      {
+        "required": [
+          "$ref"
+        ]
+      },
+      {
+        "required": [
+          "$dynamicRef"
+        ]
+      }
+    ]
+  },
+  "then": {
+    "oasType": "Reference"
+  },
   "oasType": "Schema",
   "oasReferences": {
     "0/$ref": "Schema",

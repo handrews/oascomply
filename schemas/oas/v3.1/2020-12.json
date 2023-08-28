@@ -51,6 +51,23 @@
       "default": {}
     }
   },
+  "if": {
+    "anyOf": [
+      {
+        "required": [
+          "$ref"
+        ]
+      },
+      {
+        "required": [
+          "$dynamicRef"
+        ]
+      }
+    ]
+  },
+  "then": {
+    "oasType": "Reference"
+  },
   "oasType": "Schema",
   "oasReferences": {
     "0/$ref": "Schema",
