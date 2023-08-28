@@ -202,7 +202,6 @@ class JschonSchemaParser(SchemaParser):
     def __init__(self, config, annotations=()):
         super().__init__(config, annotations)
         self._filtered = True
-        self._result_cache = {}
 
     def parse(self, document, oastype, output_format='basic'):
         if document.oas_root is None:
@@ -232,5 +231,4 @@ class JschonSchemaParser(SchemaParser):
             output_format,
             annotations=self._annotations,
         )
-        self._result_cache[document.oas_root.pointer_uri] = output
         return output
