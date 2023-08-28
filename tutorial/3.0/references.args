@@ -1,9 +1,9 @@
 -d
-tutorial/references
+tutorial/3.0/references
 https://example.com/
 -f
-tutorial/references/openapi.json
+tutorial/3.0/references/openapi.json
 -f
-tutorial/references/pathitems/foo.json
+tutorial/3.0/references/pathitems/foo.json
 -f
-tutorial/references/schemas/bar.json
+tutorial/3.0/references/schemas/bar.json
