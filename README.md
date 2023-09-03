@@ -34,7 +34,7 @@ Currently, only OAS 3.0 is supported, although OAS 3.1 support is planned.
 
 `oascomply` requires Python 3.8 or later, and must be checked out from GitHub
 and installed using [`poetry`](https://python-poetry.org/docs/).  See the
-[Installation Guide](INSTALL.md) for more detailed instructions.
+[Installation Guide](docs/installation.rst) for more detailed instructions.
 
 ## Parsing API descriptions
 
