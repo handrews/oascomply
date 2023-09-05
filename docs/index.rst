@@ -29,7 +29,7 @@ or used as pre-parsed input to an OpenAPI-related tool.
    :caption: Contents:
 
    quickstart
-   installation
+   guide/index
    modules
 
 
