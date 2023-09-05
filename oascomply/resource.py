@@ -16,7 +16,7 @@ from jschon.resource import JSONResource
 from jschon.catalog import Source
 from jschon.vocabulary import Metaschema
 
-from oascomply.urimapping import URI, ThingToURI, PathToURI, URLToURI
+from oascomply.urimapping import URI, LocationToURI, PathToURI, URLToURI
 from oascomply.oassource import (
     OASSource, DirectMapSource, FileMultiSuffixSource, HttpMultiSuffixSource,
 )
@@ -1342,40 +1342,41 @@ class OASResourceManager:
 
     def _match_prefix(
         self,
-        a_thing: ThingToURI,
-        prefix_things: Sequence[ThingToURI],
+        a_loc: LocationToURI,
+        prefix_locations: Sequence[LocationToURI],
         suffixes: Sequence[str],
-    ) -> Tuple[ThingToURI, bool]:
-        if a_thing.auto_uri:
-            a_str = str(a_thing.thing)
+    ) -> Tuple[LocationToURI, bool]:
+        if a_loc.auto_uri:
+            a_str = str(a_loc.location)
 
-            for other_thing in sorted(
-                prefix_things,
-                key=lambda p: str(p.thing),
+            for other_location in sorted(
+                prefix_locations,
+                key=lambda p: str(p.location),
                 reverse=True, # longest matches first
             ):
-                other_str = str(other_thing.thing)
+                other_str = str(other_location.location)
 
                 if a_str.startswith(other_str):
                     if '.' in a_str and a_str[a_str.rindex('.'):] in suffixes:
                         a_str = a_str[:a_str.rindex('.')]
                         a_str = (
-                            str(other_thing.uri) + a_str[len(other_str) + 1:]
+                            str(other_location.uri) + a_str[len(other_str) + 1:]
                         )
 
                     logger.debug(
-                        f'Re-assinging URI <{a_str}> to "{a_thing.thing}"',
+                        f'Re-assinging URI <{a_str}> to "{a_loc.location}"',
                     )
                     return (
-                        type(a_thing)(
-                            [str(a_thing.thing), a_str],
-                            suffixes,
-                            oastype=a_thing.oastype,
+                        type(a_loc)(
+                            str(a_loc.location),
+                            a_str,
+                            strip_suffixes=suffixes,
+                            oastype=a_loc.oastype,
                         ),
                         True,
                     )
 
-        return (a_thing, False)
+        return (a_loc, False)
 
     def _get_with_url_and_sourcemap(
         self,

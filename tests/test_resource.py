@@ -16,7 +16,7 @@ from oascomply.resource import (
     OASJSONSchema,
     OASResourceManager,
     URI,
-    ThingToURI,
+    LocationToURI,
     PathToURI,
     URLToURI,
     OAS_SCHEMA_INFO,
@@ -103,8 +103,8 @@ def manager(catalog):
     return OASResourceManager(
         catalog,
         directories=[
-            PathToURI([str(A_DIR), str(A_PREFIX_URI)], uri_is_prefix=True),
-            PathToURI([str(B_DIR), str(B_PREFIX_URI)], uri_is_prefix=True),
+            PathToURI(str(A_DIR), str(A_PREFIX_URI), uri_is_prefix=True),
+            PathToURI(str(B_DIR), str(B_PREFIX_URI), uri_is_prefix=True),
         ],
         dir_suffixes=['.json', '.yaml'],
     )
@@ -152,14 +152,15 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'files': [
                 # -f file -x .json
-                PathToURI(str(FOO_JSON_PATH), ('.json',)),
+                PathToURI(str(FOO_JSON_PATH), strip_suffixes=('.json',)),
                 # -f file uri
                 PathToURI(
-                    [str(BAR_YAML_PATH), str(OTHER_URI)],
-                    DEFAULT_SUFFIXES,
+                    str(BAR_YAML_PATH),
+                    str(OTHER_URI),
+                    strip_suffixes=DEFAULT_SUFFIXES,
                 ),
                 # -f file -x
-                PathToURI(str(B_SCHEMA_PATH), ()),
+                PathToURI(str(B_SCHEMA_PATH), strip_suffixes=()),
             ],
         },
         {
@@ -181,11 +182,11 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'urls': [
                 # -u url uri
-                URLToURI([str(A_URL), str(A_URI)], DEFAULT_SUFFIXES),
+                URLToURI(str(A_URL), str(A_URI), strip_suffixes=DEFAULT_SUFFIXES),
                 # -u url -x json
-                URLToURI(str(B_URL), ('.json',)),
+                URLToURI(str(B_URL), strip_suffixes=('.json',)),
                 # -u url -x
-                URLToURI(str(B_SCHEMA_URL), ()),
+                URLToURI(str(B_SCHEMA_URL), strip_suffixes=()),
             ],
         },
         {
@@ -207,7 +208,7 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'directories': [
                 PathToURI(str(A_DIR), uri_is_prefix=True),
-                PathToURI([str(B_DIR), str(BASE_URI)], uri_is_prefix=True),
+                PathToURI(str(B_DIR), str(BASE_URI), uri_is_prefix=True),
             ],
         },
         {
@@ -232,7 +233,7 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'directories': [
                 PathToURI(str(A_DIR), uri_is_prefix=True),
-                PathToURI([str(B_DIR), str(BASE_URI)], uri_is_prefix=True),
+                PathToURI(str(B_DIR), str(BASE_URI), uri_is_prefix=True),
             ],
             'dir_suffixes': ['.json', '.yaml'],
         },
@@ -258,10 +259,7 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'url_prefixes': [
                 URLToURI(str(A_PREFIX_URL), uri_is_prefix=True),
-                URLToURI(
-                    [str(B_PREFIX_URL), str(BASE_URI)],
-                    uri_is_prefix=True,
-                ),
+                URLToURI(str(B_PREFIX_URL), str(BASE_URI), uri_is_prefix=True),
             ],
         },
         {
@@ -287,10 +285,7 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'url_prefixes': [
                 URLToURI(str(A_PREFIX_URL), uri_is_prefix=True),
-                URLToURI(
-                    [str(B_PREFIX_URL), str(BASE_URI)],
-                    uri_is_prefix=True,
-                ),
+                URLToURI(str(B_PREFIX_URL), str(BASE_URI), uri_is_prefix=True),
             ],
             'url_suffixes': ['.json', '.yaml'],
         },
@@ -316,16 +311,17 @@ def test_add_uri_source(base, prefix, catalog):
     (
         {
             'directories': [
-                PathToURI([str(A_DIR), str(A_DIR_URI)], uri_is_prefix=True),
+                PathToURI(str(A_DIR), str(A_DIR_URI), uri_is_prefix=True),
             ],
             'dir_suffixes': ['.yaml'],
             'files': [
-                PathToURI(str(A_PATH), ['.json']),
+                PathToURI(str(A_PATH), strip_suffixes=['.json']),
                 PathToURI(
-                    [str(A_PATH.parent / 'x'), str(OTHER_URI)],
-                    ['.json'],
+                    str(A_PATH.parent / 'x'),
+                    str(OTHER_URI),
+                    strip_suffixes=['.json'],
                 ),
-                PathToURI(str(B_PATH), ['.json']),
+                PathToURI(str(B_PATH), strip_suffixes=['.json']),
             ],
         },
         {
@@ -352,18 +348,20 @@ def test_add_uri_source(base, prefix, catalog):
         {
             'url_prefixes': [
                 URLToURI(
-                    [str(A_PREFIX_URL), str(A_PREFIX_URI)],
+                    str(A_PREFIX_URL),
+                    str(A_PREFIX_URI),
                     uri_is_prefix=True,
                 ),
             ],
             'url_suffixes': ['.yaml'],
             'urls': [
-                URLToURI(str(A_URL), ['.json']),
+                URLToURI(str(A_URL), strip_suffixes=['.json']),
                 URLToURI(
-                    [str(URI('../x').resolve(A_URL)), str(OTHER_URI)],
-                    ['.json'],
+                    str(URI('../x').resolve(A_URL)),
+                    str(OTHER_URI),
+                    strip_suffixes=['.json'],
                 ),
-                URLToURI(str(B_URL), ['.json']),
+                URLToURI(str(B_URL), strip_suffixes=['.json']),
             ],
         },
         {

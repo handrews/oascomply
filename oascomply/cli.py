@@ -14,7 +14,7 @@ from oascomply.oassource import (
 from oascomply.apidescription import ApiDescription
 from oascomply.serializer import OASSerializer
 from oascomply.urimapping import (
-    URI, URIError, ThingToURI, PathToURI, URLToURI,
+    URI, URIError, LocationToURI, PathToURI, URLToURI,
 )
 from oascomply.resource import OASResourceManager
 
@@ -124,11 +124,11 @@ class CustomArgumentParser(argparse.ArgumentParser):
         return self._fix_message(super().format_help())
 
 
-class ActionAppendThingToURI(argparse.Action):
+class ActionAppendLocationToURI(argparse.Action):
     @classmethod
     def make_action(
         cls,
-        arg_cls: Type[ThingToURI] = ThingToURI,
+        arg_cls: Type[LocationToURI] = LocationToURI,
         strip_suffixes: Sequence[str] = (),
     ):
         logger.debug(f'Registering {arg_cls.__name__} argument action')
@@ -145,7 +145,7 @@ class ActionAppendThingToURI(argparse.Action):
         dest: str,
         *,
         nargs: Optional[str] = None,
-        arg_cls: Type[ThingToURI],
+        arg_cls: Type[LocationToURI],
         strip_suffixes: Sequence[str],
         **kwargs
     ) -> None:
@@ -158,18 +158,36 @@ class ActionAppendThingToURI(argparse.Action):
         super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
     def __call__(self, parser, namespace, values, option_string=None):
+        # This should do initial classification into locations, URIs,
+        # and OASTypes.
+        #
+        # The first value is always a location (path or URL), the last
+        # MAY be an OASType, and all others are URI (not URI-references).
+        # URIs always have at least one ":" in them, and OASTypes never
+        # include a ":", so this is a fast way to distinguish them.
         logger.debug(f'Examining {values!r} for {self._arg_cls.__name__}')
-        arg_list = getattr(namespace, self.dest)
+
+        location = values[0]
         oastype = None
-        if len(values) == 3:
-            oastype = values[2]
-            values = values[:2]
-        elif len(values) == 2 and ':' not in values[1]:
-            oastype = values[1]
-            values = values[:1]
+        primary_uri = None
+        additional_uris = []
+        if len(values) > 1:
+            if ':' not in values[-1]:
+                oastype = values[-1]
+                uris = values[1:-1]
+            else:
+                uris = values[1:]
+
+            if uris:
+                primary_uri = uris[0]
+                additional_uris = uris[1:]
+
+        arg_list = getattr(namespace, self.dest)
         arg_list.append(
             self._arg_cls(
-                values,
+                location,
+                primary_uri,
+                additional_uris=additional_uris,
                 strip_suffixes=self._strip_suffixes,
                 oastype=oastype,
             ),
@@ -231,7 +249,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '-f',
         '--file',
         nargs='+',
-        action=ActionAppendThingToURI.make_action(
+        action=ActionAppendLocationToURI.make_action(
             arg_cls=PathToURI,
             strip_suffixes=ss_args.strip_suffixes,
         ),
@@ -252,7 +270,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '-u',
         '--url',
         nargs='+',
-        action=ActionAppendThingToURI.make_action(
+        action=ActionAppendLocationToURI.make_action(
             arg_cls=URLToURI,
             strip_suffixes=ss_args.strip_suffixes,
         ),
@@ -276,7 +294,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '-d',
         '--directory',
         nargs='+',
-        action=ActionAppendThingToURI.make_action(arg_cls=PathToURI),
+        action=ActionAppendLocationToURI.make_action(arg_cls=PathToURI),
         default=[],
         dest='directories',
         help="Resolve references matching the URI prefix from the given "
@@ -288,7 +306,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '-p',
         '--url-prefix',
         nargs='+',
-        action=ActionAppendThingToURI.make_action(arg_cls=URLToURI),
+        action=ActionAppendLocationToURI.make_action(arg_cls=URLToURI),
         default=[],
         dest='url_prefixes',
         help="Resolve references the URI prefix by replacing it with "
