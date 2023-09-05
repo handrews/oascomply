@@ -12,6 +12,7 @@ FOO_YAML_URI = BASE_URI.copy(path='/foo.yaml')
 FOO_URI = BASE_URI.copy(path='/foo')
 DIR_URI = jschon.URI('https://test.com/bar/')
 OTHER_URI = jschon.URI('tag:example.com,2023:bar')
+URN_URI = jschon.URI('urn:example:helloworld')
 
 
 def normalize_file_url(url_str: str, append_slash=False) -> str:

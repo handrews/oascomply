@@ -6,12 +6,9 @@ import jschon
 
 import pytest
 
+from oascomply.urimapping import LocationToURI, PathToURI, URLToURI
 from oascomply.cli import (
-    ThingToURI,
-    PathToURI,
-    URLToURI,
-    parse_logging,
-    parse_non_logging,
+    parse_logging, parse_non_logging, ActionAppendLocationToURI,
 )
 
 from . import (
@@ -20,6 +17,7 @@ from . import (
     FOO_URI,
     DIR_URI,
     OTHER_URI,
+    URN_URI,
     FOO_JSON_PATH,
     FOO_PATH,
     FOO_JSON_PATH_URL,
@@ -51,6 +49,17 @@ def _override_args(**kwargs):
     overridden = DEFAULT_ARG_NAMESPACE.copy()
     overridden.update(kwargs)
     return overridden
+
+
+def test_action_wrong_nargs():
+    with pytest.raises(ValueError, match=r'expected nargs="\+"'):
+        ActionAppendLocationToURI(
+            '-f',
+            'foo',
+            nargs='*',
+            arg_cls=LocationToURI,
+            strip_suffixes=(),
+        )
 
 
 @pytest.mark.parametrize('argv,level,remaining', (
@@ -93,7 +102,19 @@ def test_parse_logging(argv, level, remaining):
             files=[
                 PathToURI(
                     'foo.yaml',
-                    DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                ),
+            ],
+        )
+    ),
+    (
+        ['-f', 'bar.json', 'Schema'],
+        _override_args(
+            files=[
+                PathToURI(
+                    'bar.json',
+                    oastype='Schema',
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
         )
@@ -103,8 +124,22 @@ def test_parse_logging(argv, level, remaining):
         _override_args(
             files=[
                 PathToURI(
-                    ['foo.yaml', str(FOO_YAML_URI)],
-                    DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                    'foo.yaml',
+                    str(FOO_YAML_URI),
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                ),
+            ],
+        ),
+    ),
+    (
+        ['--file', 'foo.yaml', str(FOO_YAML_URI), str(URN_URI), str(OTHER_URI)],
+        _override_args(
+            files=[
+                PathToURI(
+                    'foo.yaml',
+                    str(FOO_YAML_URI),
+                    additional_uris=(str(URN_URI), str(OTHER_URI)),
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
         ),
@@ -113,8 +148,8 @@ def test_parse_logging(argv, level, remaining):
         ['-f', 'foo.yaml', '--file', 'bar.json', '-x'],
         _override_args(
             files=[
-                PathToURI('foo.yaml', []),
-                PathToURI('bar.json', []),
+                PathToURI('foo.yaml', strip_suffixes=[]),
+                PathToURI('bar.json', strip_suffixes=[]),
             ],
         ),
     ),
@@ -124,31 +159,33 @@ def test_parse_logging(argv, level, remaining):
             urls=[
                 URLToURI(
                     str(FOO_YAML_URI),
-                    DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
                 URLToURI(
                     str(FOO_JSON_PATH_URL),
-                    DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
         ),
     ),
     (
-        ['--url', str(FOO_YAML_URI), str(OTHER_URI)],
+        ['--url', str(FOO_YAML_URI), str(OTHER_URI), str(URN_URI)],
         _override_args(
             urls=[
                 URLToURI(
-                    [str(FOO_YAML_URI), str(OTHER_URI)],
-                    DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                    str(FOO_YAML_URI),
+                    str(OTHER_URI),
+                    additional_uris=[str(URN_URI)],
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
         ),
     ),
     (
-        ['--url', str(FOO_YAML_URI), '--strip-suffixes=.json', '-x', '.yml'],
+        ['--url', str(FOO_YAML_URI), '--strip-suffixes=.yml'],
         _override_args(
             urls=[
-                URLToURI(str(FOO_YAML_URI), ['.json', '.yml']),
+                URLToURI(str(FOO_YAML_URI), strip_suffixes=['.yml']),
             ],
         ),
     ),
