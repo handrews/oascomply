@@ -29,56 +29,99 @@ from . import (
 )
 
 
-@pytest.mark.parametrize('args,kwargs,location,uri', (
-    (['about:blank'], {}, 'about:blank', jschon.URI('about:blank')),
+@pytest.mark.parametrize(
+    'args,kwargs,location,uri,uris,oastype,suffixes,is_prefix', (
+    (
+        ['about:blank'],
+        {},
+        'about:blank',
+        jschon.URI('about:blank'),
+        [],
+        None,
+        (),
+        False,
+),
     (
         [str(FOO_YAML_URI)],
-        {'strip_suffixes': ['.json']},
+        {'strip_suffixes': ['.json'], 'oastype': 'Schema'},
         str(FOO_YAML_URI),
         FOO_YAML_URI,
+        [],
+        'Schema',
+        ['.json'],
+        False,
     ),
     (
         [str(FOO_YAML_URI)],
-        {'strip_suffixes': ['.yaml']},
+        {'strip_suffixes': ['.yaml'], 'oastype': 'OpenAPI'},
         str(FOO_YAML_URI),
         FOO_URI,
+        [],
+        'OpenAPI',
+        ['.yaml'],
+        False,
     ),
     (
         [str(BASE_URI)],
         {'strip_suffixes': (), 'uri_is_prefix': True },
         str(BASE_URI),
         BASE_URI,
+        [],
+        None,
+        (),
+        True,
     ),
     (
         ['foo', str(OTHER_URI)],
-        {},
+        {'additional_uris': [str(FOO_URI), str(FOO_PATH_URL)]},
         'foo',
         OTHER_URI,
+        [FOO_URI, FOO_PATH_URL],
+        None,
+        (),
+        False,
     ),
     (
         ['foo.yaml', str(OTHER_URI)],
         {'strip_suffixes': ['.yaml']},
         'foo.yaml',
         OTHER_URI,
+        [],
+        None,
+        ['.yaml'],
+        False,
     ),
     (
         ['foo.yaml', str(FOO_YAML_URI)],
         {'strip_suffixes': ['.yaml']},
         'foo.yaml',
         FOO_YAML_URI,
+        [],
+        None,
+        ['.yaml'],
+        False,
     ),
     (
         ['foo', str(BASE_URI)],
-        {'strip_suffixes': (), 'uri_is_prefix': True},
+        {'uri_is_prefix': True},
         'foo',
         BASE_URI,
+        [],
+        None,
+        (),
+        True,
     ),
 ))
-def test_location_to_uri(args, kwargs, location, uri):
+def test_location_to_uri(
+    args, kwargs, location, uri, uris, oastype, suffixes, is_prefix):
     t = LocationToURI(*args, **kwargs)
     assert t.location == location
     assert t.uri == uri
     assert t.auto_uri == (len(args) < 2 or args[1] is None)
+    assert t.additional_uris == uris
+    assert t.oastype == oastype
+    assert t._to_strip == suffixes
+    assert t._uri_is_prefix == is_prefix
 
 
 @pytest.mark.parametrize('args,kwargs,error', (
@@ -106,7 +149,19 @@ def test_location_to_uri(args, kwargs, location, uri):
         },
     "not include a query or fragment",
     ),
-    (['foo'], {}, 'cannot be relative'),
+    (
+        ['foo'],
+        {},
+        'cannot be relative',
+    ),
+    (
+        ['https://ex.org'],
+        {
+            'additional_uris': ['https://foo.org'],
+            'uri_is_prefix': True,
+        },
+        'Cannot associate additional URIs with a URI prefix',
+    ),
 ))
 def test_location_to_uri_errors(args, kwargs, error, caplog):
     with caplog.at_level(logging.WARNING):
