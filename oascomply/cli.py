@@ -23,51 +23,105 @@ logger = logging.getLogger(__name__)
 
 
 HELP_PROLOG = """
-Load and validate an API Description/Definition (APID).
+Load and validate an OpenAPI Description/Definition (OAD).
 
-The initial APID document is parsed immediately, with other documents parsed
-as they are referenced.  The initial document is the first of:
+Explanations of "location specification" and "prefix specification"
+are provided after the option list.
+"""
 
-1. The document from -i (--initial-resource), which takes a URI (like "$ref")
+HELP_EPILOG = """
+Each file or network resource in an OAD has both a URL (the lcoation
+from which it is loaded) and a URI (the identifier with which it can
+be referenced using "$ref" or similar keywords).  By default, the URI
+is the same as the URL, with local files being assigned the corresponding
+"file:" URL.
+
+LOCATION SPECIFICATIONS
+=======================
+
+The -f (--file) and -u (--url) options take a location specification,
+where several arguments can follow the option with the following syntax:
+
+   LOCATION [URI [ADDITIONAL_URI ...]] [OASTYPE]
+
+The syntax for the location is specific to each option.  If the URI
+is not provided, one is generated from the URL, taking into account
+the -x (--strip-suffixes) option.
+
+ADDITIONAL_URIs can be passed if the contents of the file define URIs
+other than the URI that is used for the entire file.
+
+The OASTYPE is the semantic type of the entire file, as taken from
+the section headers in the OAS itself (e.g. OpenAPI, Schema, PathItem, etc.).
+
+If either OASTYPE or ADDITIONAL_URIs are provided, the file or network
+resource is loaded and parsed up front.  If ADDITIONAL_URIs are provided
+without OASTYPE, the OASTYPE is assumed to be OpenAPI.
+
+PREFIX SPECIFICATIONS
+=====================
+
+The -d (--directory) and -p (--url-prefix) optinos take a prefix specification,
+which is a simplified location specification where the URI's path must end with
+a "/" to indicate a directory to search:
+
+    LOCATION [URI]
+
+When a reference matches the URI prefix, the remaining URI path is appended
+to the location to find the appropriet file or network resource.
+
+If the URI is omitted, the location is converted to a URL (if necessary, such
+as with a local directory to a "file:" URL) which is searched directly.
+
+The -D (--directory-suffixes) and -P (--url-suffixes) options control whether
+and in what order suffixes are attached to the requested URI to find its
+URL under the location.
+
+INITIAL (a.k.a. ROOT) DOCUMENT
+==============================
+
+The initial OAD document is parsed immediately, with other documents
+either loaded up front or parsed as they are referenced, as noted abvoe.
+Each document that makes up
+and OAD has a URL (the location from which it was loaded) and a URI
+(the identifier used to reference it in "$ref" and similar keywords).
+
+The initial document is the first of:
+
+1. The document from -i (--initial-resource), which takes a URI (not URL)
 2. The first document from a -f (--file) containing an "openapi" field
 3. The first document from a -u (--url) containing an "openapi" field
 
-Each document's URL is the URL from which it was retrieved. If loaded from
-a local filesystem path, the URL is the corresponding "file:" URL.
+VALIDATION AND LINTING
+======================
 
-A document's URI is either determined from the URL (potentially as modified
-by the -x, -D, and -P options), or set directly on the command line
-(using additional arguments to -f, -u, -d, or -p)..
-This allows reference resolution to work even if the documents are not named
-or deployed in the way the references expect.
+Currently, the only option relating to validation and linting is the
+-e (--examples) option, which can be used to disable validation of
+"example", "examples", and "default" by the relevant Schema Object(s).
 
-See the "Loading APIDs and Schemas" tutorial for full documentation.
-"""
+OUTPUT
+======
 
+oascomply parses OADs into an RDF graph, which can be written to stdout
+by passing the -o (--output-format) option.  Without an argument, the
+output is written in N-Triples 1.1 format, in utf-8 encoding.  Other
+formats supported by Python's rdflib can be passed as arguments.
 
-HELP_EPILOG = """
-The -u and -f options can take an "OpenAPI type", which is a
-CamelCased name of one of the "Objects" used as section titles
-in the OpenAPI Specification, e.g. "PathItem" for the Path Item Object.
+A non-RDF serialization intended for human-readability can be written out
+using "-o toml"; this is an experimental format intended for casual
+debugging rather than machine processing.  It shortens the URIs in the graph
+in ways that RDF serializations do not allow.
 
-By default, only the initial document and portions of documents
-referenced in the course of parsing that document are loaded.
-If you have a document that is the target of many references, pointing
-to differen parts of that document, it may be faster to load the
-document up front and avoid repeatedly reloading it.
+The -n (--number-lines) option can be passed to include line numbers in
+the error or graph output.  This option is expensive, particularly with
+YAML, so it is disabled by default.
 
-In OpenAPI 3.1, Schema Objects can use "$id"s, including in subschemas,
-to defined reference target URIs.  Schema Objects using "$id" in
-a subschema MUST be loaded and parsed up front in order for references
-to and from such subschemas to be correctly resolved.
+TUTORIAL
+========
 
-See the README for further information on:
-
-* How API description data appears in the output
-* How to extract human-friendly names from the output
-* API description document URLs vs URIs
-* Handling multi-document API descriptions
-* Handling complex referencing scenarios
+See the "Loading OADs and Schemas" tutorial for full documentation of
+the OAD-loading options described above and how they support various
+known use cases.
 """
 
 
@@ -105,13 +159,13 @@ class CustomArgumentParser(argparse.ArgumentParser):
         # nargs=+ does not support metavar=tuple
         return message.replace(
             'FILES [FILES ...]',
-            'FILE [URI] [TYPE]',
+            'FILE [URI] [URI ...] [TYPE]',
         ).replace(
             'DIRECTORIES [DIRECTORIES ...]',
             'DIRECTORY [URI_PREFIX]',
         ).replace(
             'URLS [URLS ...]',
-            'URL [URI] [TYPE]',
+            'URL [URI] [URI ...] [TYPE]',
         ).replace(
             'PREFIXES [PREFIXES ...]',
             'URL_PREFIX [URI_PREFIX]',
@@ -241,9 +295,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         '-i',
         '--initial',
-        help="The URI of the document from which to start validating.  "
-             "If not present, the first -f argument is used; if no -f "
-             "arguments are present, the first -u argument is used."
+        help="The URI of the document from which to start validating.",
     )
     parser.add_argument(
         '-f',
@@ -255,16 +307,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         ),
         default=[],
         dest='files',
-        help="An APID document as a local file, optionally followed by a URI "
-             "to use for reference resolution; if no URI is provided but the "
-             "file matches a directory passed with -d, its URI will be "
-             "determined based on the -d URI prefix (and -D if present); "
-             "if no -d matches, the corresponding 'file:' URL for the path "
-             "will be used as the URI; an OpenAPI type can follow the path "
-             "alone or path and URI, which will cause the document to be "
-             "loaded and parsed immediately (see end notes below for "
-             "an explanations of types and use cases for this option)"
-             "This option can be repeated; see also -x, -d, -D",
+        help="A location specification using a filesytem path as the location.",
     )
     parser.add_argument(
         '-u',
@@ -276,17 +319,8 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         ),
         default=[],
         dest='urls',
-        help="A URL for an APID document, optionally followed by a URI "
-             "to use for reference resolution; if no URI is provided but the "
-             "url matches a prefix passed with -p, its URI will be determined "
-             "based on the -p URI prefix (and -P if present); if no -p "
-             "matches, the URL will also be used as the URI; currently only "
-             "'http:' and 'https:' URLs are supported; "
-             "an OpenAPI type can follow the path "
-             "alone or path and URI, which will cause the document to be "
-             "loaded and parsed immediately (see end notes below for "
-             "an explanations of types and use cases for this option)"
-             "This option can be repeated; see also -x, -p, -P",
+        help="A location specification using a URL for the location; "
+             "currently only 'http:' and 'https:' URLs are supported.",
     )
     # Already parsed, but add to include in usage message
     _add_strip_suffixes_option(parser)
@@ -297,10 +331,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         action=ActionAppendLocationToURI.make_action(arg_cls=PathToURI),
         default=[],
         dest='directories',
-        help="Resolve references matching the URI prefix from the given "
-            "directory; if no URI prefix is provided, use the 'file:' URL "
-            "corresponding to the directory as the prefix; this option "
-            "can be repeated; see also -D",
+        help="A prefix specification using a local directory as the location.",
     )
     parser.add_argument(
         '-p',
@@ -309,10 +340,8 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         action=ActionAppendLocationToURI.make_action(arg_cls=URLToURI),
         default=[],
         dest='url_prefixes',
-        help="Resolve references the URI prefix by replacing it with "
-            "the given URL prefix, or directly from URLs matching the "
-            "URL prefix if no URI prefix is provided; this option can be "
-            "repeated; see also -P",
+        help='A prefix specification using a URL (with a path ending in "/") '
+             "for the location; only 'http:' and 'https:' URLs are supported.",
     )
     parser.add_argument(
         '-D',
@@ -320,11 +349,9 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         nargs='*',
         default=('.json', '.yaml', '.yml'),
         dest='dir_suffixes',
-        help="When resolving references using -d, try appending each "
-            "suffix in order to the file path until one succeeds; "
-            "the empty string can be passed to try loading the "
-            "unmodified path first as JSON and then if that fails as "
-            "YAML; the default suffixes are .json, .yaml .yml",
+        help="The list of suffixes to search, in order, when resolving using "
+             "any directory prefix specification; files that do not fit the "
+             "suffix pattern of the directory should be loaded with -f.",
     )
     parser.add_argument(
         '-P',
@@ -332,11 +359,9 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         nargs='*',
         default=(),
         dest='url_suffixes',
-        help="When resolving references using -p, try appending each "
-            "suffix in order to the URL until one succeeds; the empty "
-            "string can be passed to try loading the unmodified URL "
-            "which will be parsed based on the HTTP Content-Type header; "
-            "by default, no suffixes are appended to URLs",
+        help="The list of suffixes to search, in order, when resolving using "
+             "any URL prefix specification; resources that do not fit the "
+             "suffix pattern of the URL prefix should be loaded with -u.",
     )
     parser.add_argument(
         '-n',
