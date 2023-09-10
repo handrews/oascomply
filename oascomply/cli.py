@@ -29,6 +29,9 @@ Explanations of "location specification" and "prefix specification"
 are provided after the option list.
 """
 
+# TODO: When parsing up front due to OASType, should references only
+#       be followed if reached from the root document?  Probably yes.
+
 HELP_EPILOG = """
 Each file or network resource in an OAD has both a URL (the lcoation
 from which it is loaded) and a URI (the identifier with which it can
@@ -53,10 +56,8 @@ other than the URI that is used for the entire file.
 
 The OASTYPE is the semantic type of the entire file, as taken from
 the section headers in the OAS itself (e.g. OpenAPI, Schema, PathItem, etc.).
-
-If either OASTYPE or ADDITIONAL_URIs are provided, the file or network
-resource is loaded and parsed up front.  If ADDITIONAL_URIs are provided
-without OASTYPE, the OASTYPE is assumed to be OpenAPI.
+If an OASTYPE is provided, the file or network resource is loaded and
+parsed prior to resolving any references.
 
 PREFIX SPECIFICATIONS
 =====================
