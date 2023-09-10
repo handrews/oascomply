@@ -75,7 +75,7 @@ class LocationToURI:
 
             self._oastype = oastype
 
-            self._to_strip = strip_suffixes
+            self._to_strip = tuple(strip_suffixes)
             self._uri_is_prefix = uri_is_prefix
 
             location = self._set_location(location)
@@ -143,7 +143,14 @@ class LocationToURI:
     def __eq__(self, other):
         if not isinstance(other, LocationToURI):
             return NotImplemented
-        return self.location == other.location and self.uri == other.uri
+        return (
+            self.location == other.location and
+            self.uri == other.uri and
+            self.additional_uris == other.additional_uris and
+            self.oastype == other.oastype and
+            self._to_strip == other._to_strip and
+            self._uri_is_prefix == other._uri_is_prefix
+        )
 
     @property
     def location(self):

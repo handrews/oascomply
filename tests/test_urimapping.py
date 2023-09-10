@@ -20,6 +20,7 @@ from . import (
     FOO_URI,
     DIR_URI,
     OTHER_URI,
+    URN_URI,
     FOO_JSON_PATH,
     FOO_PATH,
     FOO_JSON_PATH_URL,
@@ -120,7 +121,7 @@ def test_location_to_uri(
     assert t.auto_uri == (len(args) < 2 or args[1] is None)
     assert t.additional_uris == uris
     assert t.oastype == oastype
-    assert t._to_strip == suffixes
+    assert t._to_strip == tuple(suffixes)
     assert t._uri_is_prefix == is_prefix
 
 
@@ -181,7 +182,7 @@ def test_location_to_uri_set_uri():
     (['about:blank'], {}),
     (
         [str(OTHER_URI), str(BASE_URI)],
-        {'strip_suffixes': ['.json'], 'uri_is_prefix': True},
+        {'strip_suffixes': ('.json',), 'uri_is_prefix': True},
     ),
 ))
 def test_location_to_uri_repr(args, kwargs):
@@ -210,10 +211,49 @@ def test_location_to_uri_repr(args, kwargs):
     )
 
 
+def test_no_additional_uris_with_prefix():
+    with pytest.raises(
+        ValueError,
+        match='Cannot associate additional URIs with a URI prefix',
+    ):
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris=[str(OTHER_URI)],
+            uri_is_prefix=True,
+        )
+
 @pytest.mark.parametrize('left,right,equal', (
     (
-        LocationToURI('about:blank', str(FOO_URI)),
-        LocationToURI('about:blank', str(FOO_URI)),
+        LocationToURI('about:blank'),
+        LocationToURI('about:blank'),
+        True,
+    ),
+    (
+        LocationToURI(str(BASE_URI), uri_is_prefix=True),
+        LocationToURI(str(BASE_URI), uri_is_prefix=True),
+        True,
+    ),
+    (
+        LocationToURI(str(BASE_URI), uri_is_prefix=True),
+        LocationToURI(str(BASE_URI), uri_is_prefix=False),
+        False,
+    ),
+    (
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris=[str(OTHER_URI)],
+            oastype='PathItem',
+            strip_suffixes=('.json',),
+        ),
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris={str(OTHER_URI)},
+            oastype='PathItem',
+            strip_suffixes=['.json'],
+        ),
         True,
     ),
     (
@@ -224,6 +264,57 @@ def test_location_to_uri_repr(args, kwargs):
     (
         LocationToURI('about:blank', str(OTHER_URI)),
         LocationToURI('about:blank', str(FOO_URI)),
+        False,
+    ),
+    (
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris=[str(OTHER_URI), str(URN_URI)],
+            oastype='PathItem',
+            strip_suffixes=('.json',),
+        ),
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris={str(OTHER_URI)},
+            oastype='PathItem',
+            strip_suffixes=['.json'],
+        ),
+        False,
+    ),
+    (
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris=[str(OTHER_URI)],
+            oastype='Schema',
+            strip_suffixes=('.json',),
+        ),
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris={str(OTHER_URI)},
+            oastype='PathItem',
+            strip_suffixes=['.json'],
+        ),
+        False,
+    ),
+    (
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris=[str(OTHER_URI)],
+            oastype='PathItem',
+            strip_suffixes=('.json',),
+        ),
+        LocationToURI(
+            str(FOO_JSON_PATH),
+            str(FOO_URI),
+            additional_uris={str(OTHER_URI)},
+            oastype='PathItem',
+            strip_suffixes=['.yaml', '.yml'],
+        ),
         False,
     ),
 ))
