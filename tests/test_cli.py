@@ -15,6 +15,7 @@ from . import (
     FOO_URI,
     DIR_URI,
     OTHER_URI,
+    URN_URI,
     FOO_JSON_PATH,
     FOO_PATH,
     FOO_JSON_PATH_URL,
@@ -94,12 +95,37 @@ def test_parse_logging(argv, level, remaining):
         )
     ),
     (
+        ['-f', 'bar.json', 'Schema'],
+        _override_args(
+            files=[
+                PathToURI(
+                    'bar.json',
+                    oastype='Schema',
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                ),
+            ],
+        )
+    ),
+    (
         ['--file', 'foo.yaml', str(FOO_YAML_URI)],
         _override_args(
             files=[
                 PathToURI(
                     'foo.yaml',
                     str(FOO_YAML_URI),
+                    strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
+                ),
+            ],
+        ),
+    ),
+    (
+        ['--file', 'foo.yaml', str(FOO_YAML_URI), str(URN_URI), str(OTHER_URI)],
+        _override_args(
+            files=[
+                PathToURI(
+                    'foo.yaml',
+                    str(FOO_YAML_URI),
+                    additional_uris=(str(URN_URI), str(OTHER_URI)),
                     strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
@@ -130,22 +156,23 @@ def test_parse_logging(argv, level, remaining):
         ),
     ),
     (
-        ['--url', str(FOO_YAML_URI), str(OTHER_URI)],
+        ['--url', str(FOO_YAML_URI), str(OTHER_URI), str(URN_URI)],
         _override_args(
             urls=[
                 URLToURI(
                     str(FOO_YAML_URI),
                     str(OTHER_URI),
+                    additional_uris=[str(URN_URI)],
                     strip_suffixes=DEFAULT_ARG_NAMESPACE['strip_suffixes'],
                 ),
             ],
         ),
     ),
     (
-        ['--url', str(FOO_YAML_URI), '--strip-suffixes=.json', '-x', '.yml'],
+        ['--url', str(FOO_YAML_URI), '--strip-suffixes=.yml'],
         _override_args(
             urls=[
-                URLToURI(str(FOO_YAML_URI), strip_suffixes=['.json', '.yml']),
+                URLToURI(str(FOO_YAML_URI), strip_suffixes=['.yml']),
             ],
         ),
     ),
