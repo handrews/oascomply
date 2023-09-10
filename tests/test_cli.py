@@ -7,7 +7,9 @@ import jschon
 import pytest
 
 from oascomply.urimapping import LocationToURI, PathToURI, URLToURI
-from oascomply.cli import parse_logging, parse_non_logging
+from oascomply.cli import (
+    parse_logging, parse_non_logging, ActionAppendLocationToURI,
+)
 
 from . import (
     BASE_URI,
@@ -47,6 +49,17 @@ def _override_args(**kwargs):
     overridden = DEFAULT_ARG_NAMESPACE.copy()
     overridden.update(kwargs)
     return overridden
+
+
+def test_action_wrong_nargs():
+    with pytest.raises(ValueError, match=r'expected nargs="\+"'):
+        ActionAppendLocationToURI(
+            '-f',
+            'foo',
+            nargs='*',
+            arg_cls=LocationToURI,
+            strip_suffixes=(),
+        )
 
 
 @pytest.mark.parametrize('argv,level,remaining', (
