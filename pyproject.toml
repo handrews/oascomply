@@ -6,11 +6,11 @@ authors = ["Henry H. Andrews <handews@modern-json-schema.com>"]
 readme = "README.md"
 
 [tool.poetry.scripts]
-oascomply = 'oascomply.cli:run'
-patch-oas-schemas = 'oascomply.patch:patch'
-yaml-to-json = 'oascomply.patch:yaml_to_json'
+oascomply = 'oascomply.cli.oascomply:run'
+patch-oas-schemas = 'oascomply.cli.patch:patch'
+yaml-to-json = 'oascomply.cli.yamltojson:yaml_to_json'
 oas-reparse = 'oascomply.reparse:regex_parse'
-oas30-schema = 'oascomply.oas30dialect:validate_with_oas30'
+oasschema = 'oascomply.cli.schema:evaluate'
 
 [tool.poetry.dependencies]
 python = "^3.8"

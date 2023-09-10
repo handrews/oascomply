@@ -8,8 +8,9 @@ import pytest
 
 from oascomply.urimapping import LocationToURI, PathToURI, URLToURI
 from oascomply.cli import (
-    parse_logging, parse_non_logging, ActionAppendLocationToURI,
+    parse_logging, ActionAppendLocationToURI,
 )
+from oascomply.cli.oascomply import parse_non_logging
 
 from . import (
     BASE_URI,
