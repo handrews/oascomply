@@ -10,7 +10,7 @@ oascomply = 'oascomply.cli.oascomply:run'
 patch-oas-schemas = 'oascomply.cli.patch:patch'
 yaml-to-json = 'oascomply.cli.yamltojson:yaml_to_json'
 oas-reparse = 'oascomply.reparse:regex_parse'
-oasschema = 'oascomply.cli.schema:evaluate'
+oasschema = 'oascomply.cli.schema:run'
 
 [tool.poetry.dependencies]
 python = "^3.8"
