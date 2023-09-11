@@ -11,6 +11,7 @@ __all__ = [
     'add_strip_suffixes_option',
     'LocationToURIArgumentParser',
     'ActionAppendLocationToURI',
+    'ActionStoreLocationToURI',
     'parse_logging',
 ]
 
@@ -71,12 +72,13 @@ class LocationToURIArgumentParser(argparse.ArgumentParser):
         return self._fix_message(super().format_help())
 
 
-class ActionAppendLocationToURI(argparse.Action):
+class ActionBaseLocationToURI(argparse.Action):
     @classmethod
     def make_action(
         cls,
         arg_cls: Type[LocationToURI] = LocationToURI,
         strip_suffixes: Sequence[str] = (),
+        expected_nargs: Sequence[str] =('+',),
     ):
         logger.debug(f'Registering {arg_cls.__name__} argument action')
         return lambda *args, **kwargs: cls(
@@ -96,18 +98,14 @@ class ActionAppendLocationToURI(argparse.Action):
         strip_suffixes: Sequence[str],
         **kwargs
     ) -> None:
-        if nargs != '+':
-            raise ValueError(
-                f'{type(self).__name__}: expected nargs="+"'
-            )
         self._arg_cls = arg_cls
         self._strip_suffixes = strip_suffixes
         super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
-    def __call__(self, parser, namespace, values, option_string=None):
-        # This should do initial classification into locations, URIs,
-        # and OASTypes.
-        #
+    def _get_loc_to_uri(self, values) -> LocationToURI:
+        if isinstance(values, str):
+            values = [values]
+
         # The first value is always a location (path or URL), the last
         # MAY be an OASType, and all others are URI (not URI-references).
         # URIs always have at least one ":" in them, and OASTypes never
@@ -129,16 +127,71 @@ class ActionAppendLocationToURI(argparse.Action):
                 primary_uri = uris[0]
                 additional_uris = uris[1:]
 
-        arg_list = getattr(namespace, self.dest)
-        arg_list.append(
-            self._arg_cls(
-                location,
-                primary_uri,
-                additional_uris=additional_uris,
-                strip_suffixes=self._strip_suffixes,
-                oastype=oastype,
-            ),
+        return self._arg_cls(
+            location,
+            primary_uri,
+            additional_uris=additional_uris,
+            strip_suffixes=self._strip_suffixes,
+            oastype=oastype,
         )
+
+
+class ActionStoreLocationToURI(ActionBaseLocationToURI):
+    def __init__(
+        self,
+        option_strings: str,
+        dest: str,
+        *,
+        nargs: Optional[str] = None,
+        arg_cls: Type[LocationToURI],
+        strip_suffixes: Sequence[str],
+        **kwargs
+    ) -> None:
+        if nargs is not None:
+            raise ValueError(
+                f'{type(self).__name__}: nargs "{nargs}" cannot '
+                'be used with this action',
+            )
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=nargs,
+            arg_cls=arg_cls,
+            strip_suffixes=strip_suffixes,
+            **kwargs,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self._get_loc_to_uri(values))
+
+
+class ActionAppendLocationToURI(ActionBaseLocationToURI):
+    def __init__(
+        self,
+        option_strings: str,
+        dest: str,
+        *,
+        nargs: Optional[str] = None,
+        arg_cls: Type[LocationToURI],
+        strip_suffixes: Sequence[str],
+        **kwargs
+    ) -> None:
+        if nargs != '+':
+            raise ValueError(
+                f'{type(self).__name__}: expected nargs="+"'
+            )
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=nargs,
+            arg_cls=arg_cls,
+            strip_suffixes=strip_suffixes,
+            **kwargs,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        arg_list = getattr(namespace, self.dest)
+        arg_list.append(self._get_loc_to_uri(values))
 
 
 def parse_logging(args) -> Sequence[str]:
