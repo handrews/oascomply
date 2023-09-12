@@ -1,11 +1,13 @@
 import sys
 import argparse
+import logging
 import json
 from typing import Mapping, Sequence
 
 import yaml
-from jschon import JSON, JSONSchema
+from jschon.resource import JSONResource
 
+import oascomply
 from oascomply.oas3dialect import (
     OAS30_DIALECT_METASCHEMA,
     OAS30_EXTENSION_VOCAB,
@@ -21,6 +23,10 @@ from oascomply.cli import (
     ActionStoreLocationToURI,
     LocationToURIArgumentParser,
 )
+from oascomply.resource import OASResourceManager
+
+
+logger = logging.getLogger(__name__)
 
 
 DESCRIPTION = f"""
@@ -226,7 +232,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
             strip_suffixes=ss_args.strip_suffixes,
         ),
         default=[],
-        dest='local_refs',
+        dest='local_ref_schemas',
         help='A file location specification for a schema referenced through '
              'the evaluating schema and/or metaschema',
     )
@@ -239,7 +245,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
             strip_suffixes=ss_args.strip_suffixes,
         ),
         default=[],
-        dest='http_refs',
+        dest='http_ref_schemas',
         help='An http location specification for a schema referenced through '
              'the evaluating schema and/or metaschema',
     )
@@ -291,6 +297,8 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '-a',
         '--annotation=s',
         nargs='+',
+        default=[],
+        dest='annotations',
         help='One or more annotations to be collected and returned '
              'using the "basic" output format; currently only the '
              '"basic" format is supported with this option, so this.'
@@ -369,7 +377,7 @@ def evaluate(initial_args=sys.argv[1:]):
     if instance_spec is not None:
         instance = oascomply.catalog.get_resource(
             instance_spec.uri,
-            cls=jschon.resource.JSONResource,
+            cls=JSONResource,
         )
     else:
         instance = None
@@ -379,9 +387,8 @@ def evaluate(initial_args=sys.argv[1:]):
             metaschema_uri=
                 None if metaschema_spec is None else metaschema_spec.uri,
     )
+    oascomply.catalog.resolve_references()
 
-    if instance is None:
-        return schema.validate()
     result = (
         schema.validate() if instance is None
         else schema.evaluate(instance)
@@ -395,16 +402,27 @@ def evaluate(initial_args=sys.argv[1:]):
     )
 
 
+def print_output(output):
+    json.dump(
+        output,
+        sys.stdout,
+        indent=2,
+        ensure_ascii=False,
+    )
+    # json.dump() does not include a trailing newline
+    print(flush=True)
+
+
 def run():
     result, output_format, annotations = evaluate()
 
     if not result.valid:
-        print(result.output(output_format), flush=True)
+        print_output(result.output(output_format))
         print('\nValidation failed!', file=sys.stderr)
         sys.exit(-1)
 
     if annotations:
-        print(result.output('basic', annotations=annotations), flush=True)
+        print_output(result.output('basic', annotations=annotations))
     elif output_format is not None:
-        print(result.output(output_format), flush=True)
+        print_output(result.output(output_format))
     print('Validation successful!', file=sys.stderr)
