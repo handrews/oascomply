@@ -103,6 +103,9 @@ class ActionBaseLocationToURI(argparse.Action):
         super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
     def _get_loc_to_uri(self, values) -> LocationToURI:
+        if isinstance(values, str):
+            values = [values]
+
         # The first value is always a location (path or URL), the last
         # MAY be an OASType, and all others are URI (not URI-references).
         # URIs always have at least one ":" in them, and OASTypes never
