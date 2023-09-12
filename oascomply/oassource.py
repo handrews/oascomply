@@ -25,11 +25,30 @@ from oascomply.ptrtemplates import (
 )
 from oascomply.oas3dialect import OAS30_DIALECT_METASCHEMA
 
+requests = None
+
+
+def _import_requests():
+    global requests
+    try:
+        import requests
+    except ImportError as e:
+        raise ImportError(
+            'The "requests" package is not installed, '
+            'run `pip install oascomply[requests]`'
+        ) from e
+
+
 __all__ = [
     'DirectMapSource',
     'FileMultiSuffixSource',
     'HttpMultiSuffixSource',
 ]
+
+
+# RFC 9110 Appendix A
+TCHAR = r"[!#$%&'*.^_`|A-Za-z0-9~+-]"
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +72,29 @@ class ParsedContent:
     sourcemap: Union[dict, None]
 
 
+def _parse_content_type(ctype):
+    major_type = 'application'
+    subtype = 'octet-stream'
+    suffix = None
+
+    m = re.match(f'(?P<type>{TCHAR}+)/(?P<subtype>{TCHAR}+)', ctype)
+    if m is not None:
+        major_type = m.group('type')
+        pieces = m.group('subtype').split('+')
+        subtype = pieces[0]
+        if len(pieces) > 1:
+            if len(pieces) > 2:
+                logger.warning(
+                    f'Multiple suffixes in Content-Type: "{ctype}", '
+                    'ignoring all but the last one',
+                )
+            suffix = pieces[-1]
+    else:
+        logger.warning(f'Could not parse Content-Type: "{ctype}", ignoring it')
+
+    return major_type, subtype, suffix
+
+
 class ResourceLoader:
     @classmethod
     def load(cls, location: str) -> LoadedContent:
@@ -63,23 +105,58 @@ class FileLoader(ResourceLoader):
     @classmethod
     def load(cls, full_path: PathString) -> LoadedContent:
         """Load a file, returning the contents and the retrieval URL"""
-        path = pathlib.Path(full_path)
-        content = path.read_text(encoding='utf-8')
-        parse_type = None
-        if path.suffix in ContentParser.SUPPORTED_SUFFIXES:
-            parse_type = path.suffix
+        try:
+            path = pathlib.Path(full_path)
+            content = path.read_text(encoding='utf-8')
+            parse_type = None
+            if path.suffix in ContentParser.SUPPORTED_SUFFIXES:
+                parse_type = path.suffix
 
-        return LoadedContent(
-            content=content,
-            url=path.as_uri(),
-            parse_type=parse_type,
-        )
+            return LoadedContent(
+                content=content,
+                url=path.as_uri(),
+                parse_type=parse_type,
+            )
+        except OSError as e:
+            if e.filename is not None:
+                # str(e) on OSError does not include the filename.
+                msg = f'{e.strerror}: {e.filename}'
+            else:
+                msg = str(e)
+            raise CatalogError(msg) from e
 
 
 class HttpLoader(ResourceLoader):
     @classmethod
     def load(cls, url: URIString) -> LoadedContent:
-        raise NotImplementedError
+        if requests is None:
+            _import_requests()
+
+        response = requests.get(url)
+        response.raise_for_status()
+
+        if (ctype := response.headers.get('Content-Type')) is not None:
+            major_type, subtype, suffix = _parse_content_type(ctype)
+
+        # TODO: This should probably play nicer with SUPPORTED_SUFFIXES
+        parse_type = ''
+        if subtype == 'json' or suffix == 'json':
+            parse_type = '.json'
+        elif subtype in ('yaml', 'x-yaml') or suffix in ('yaml', 'x-yaml'):
+            parse_type = '.yaml'
+        else:
+            p = jschon.URI(url).path
+            if p.endswith('.json'):
+                parse_type = '.json'
+            elif p.endswith('.yaml') or p.endswith('.yml'):
+                parse_type = '.yaml'
+
+        content = next(response.iter_content(chunk_size=None))
+        return LoadedContent(
+            content=content,
+            url=url,
+            parse_type=parse_type,
+        )
 
 
 class ContentParser:
@@ -422,16 +499,16 @@ class DirectMapSource(OASSource):
         if (location := self._map.get(jschon.URI(relative_path))) is None:
             raise CatalogError(f'Requested unknown resource {relative_path!r}')
 
+        loc_str = str(location)
         try:
             suffix = location.suffix
         except AttributeError:
-            loc_str = str(location)
             if '/' in loc_str and '.' in loc_str[loc_str.rindex('/') + 1:]:
                 suffix = loc_str[loc_str.rindex('.'):]
             else:
                 suffix = ''
         logger.debug(f"Requesting parse('{location}', '{suffix}')")
-        return self._parser.parse(location, suffix)
+        return self._parser.parse(loc_str, suffix)
 
     @classmethod
     def get_loaders(self) -> Tuple[ResourceLoader]:
