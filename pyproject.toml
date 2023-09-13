@@ -4,6 +4,14 @@ version = "0.1.0"
 description = "OpenAPI Specification Compliance Tools"
 authors = ["Henry H. Andrews <handews@modern-json-schema.com>"]
 readme = "README.md"
+include = [
+    {path = "schemas", format = ["sdist", "wheel"]},
+    {path = "semantics", format = ["sdist", "wheel"]},
+    {path = "tutorial", format = ["sdist", "wheel"]},
+    {path = "submodules/OpenAPI-Specification/schemas", format = ["sdist", "wheel"]},
+    {path = "submodules/json-schema-spec/schema.json", format = ["sdist", "wheel"]},
+    {path = "submodules/json-schema-spec/meta", format = ["sdist", "wheel"]},
+]
 
 [tool.poetry.scripts]
 oascomply = 'oascomply.cli.oascomply:run'
