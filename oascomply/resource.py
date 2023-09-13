@@ -1487,3 +1487,30 @@ class OASResourceManager:
                 f'{self._sourcemap_maps[self._catalog]}',
             )
             raise
+
+    def get_debug_configuration(self):
+        """Return a data structure of resource loading information"""
+        info = {}
+        info['direct_sources'] = {
+            repr(catalog): {
+                str(uri): str(url)
+                for uri, url in source._map.items()
+            } for catalog, source in self._direct_sources.items()
+        }
+        info['caches'] = {
+            'repr': repr(self._catalog),
+            'cache': {
+                cacheid: {
+                    str(uri): str(data.value.get('$id', '<anonymous>'))
+                        if isinstance(data.value, Mapping)
+                        else '<anonymous>'
+                    for uri, data in cache.items()
+                }
+                for cacheid, cache in self._catalog._schema_cache.items()
+            },
+        }
+        info['url_maps'] = {
+            str(catalog): {str(uri): str(url) for uri, url in url_map.items()}
+            for catalog, url_map in self._url_maps.items()
+        }
+        return info

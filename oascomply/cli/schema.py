@@ -5,6 +5,7 @@ import json
 from typing import Mapping, Sequence
 
 import yaml
+from jschon import JSONSchema
 from jschon.resource import JSONResource
 
 import oascomply
@@ -131,6 +132,11 @@ Note that the schema "{OAS30_DIALECT_METASCHEMA}" is
 *NOT* provided by the OpenAPI Initiative, but is part of the
 oascomply package (oascomply.schemas/oas/v3.0/base.json)
 """
+
+
+def parse_args(initial_args=sys.argv[1:]):
+    remaining_args = parse_logging(initial_args)
+    return parse_non_logging(remaining_args)
 
 
 def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
@@ -324,6 +330,13 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
              "default format is 'detailed'",
     )
 
+    parser.add_argument(
+        '-C',
+        '--dump-catalog',
+        action='store_true',
+        help='Diagnostic option to show the initial loaded schemas and '
+             'metaschemas',
+    )
     args = parser.parse_args()
 
     args = parser.parse_args(remaining_args)
@@ -332,10 +345,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     return args
 
 
-def evaluate(initial_args=sys.argv[1:]):
-    remaining_args = parse_logging(initial_args)
-    args = parse_non_logging(remaining_args)
-
+def evaluate(args):
     instance_spec = None
     schema_spec = None
     metaschema_spec = None
@@ -389,6 +399,18 @@ def evaluate(initial_args=sys.argv[1:]):
     )
     oascomply.catalog.resolve_references()
 
+    if args.dump_catalog:
+        yaml.dump(
+            manager.get_debug_configuration(),
+            stream=sys.stdout,
+            indent=2,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+        print(flush=True)
+        # TODO: don't sys.exit() from anywhere but run()?
+        sys.exit()
+
     result = (
         schema.validate() if instance is None
         else schema.evaluate(instance)
@@ -398,7 +420,6 @@ def evaluate(initial_args=sys.argv[1:]):
     return (
         result,
         output_format,
-        args.annotations,
     )
 
 
@@ -414,15 +435,17 @@ def print_output(output):
 
 
 def run():
-    result, output_format, annotations = evaluate()
+    args = parse_args()
+
+    result, output_format = evaluate(args)
 
     if not result.valid:
         print_output(result.output(output_format))
         print('\nValidation failed!', file=sys.stderr)
         sys.exit(-1)
 
-    if annotations:
-        print_output(result.output('basic', annotations=annotations))
+    if args.annotations:
+        print_output(result.output('basic', annotations=args.annotations))
     elif output_format is not None:
         print_output(result.output(output_format))
     print('Validation successful!', file=sys.stderr)
