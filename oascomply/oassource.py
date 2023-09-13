@@ -34,8 +34,8 @@ def _import_requests():
         import requests
     except ImportError as e:
         raise ImportError(
-            'The "requests" package is not installed, '
-            'run `pip install oascomply[requests]`'
+            'The "requests" package for HTTP usage is not installed, '
+            'run `pip install oascomply[http]`'
         ) from e
 
 
@@ -132,31 +132,34 @@ class HttpLoader(ResourceLoader):
         if requests is None:
             _import_requests()
 
-        response = requests.get(url)
-        response.raise_for_status()
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
 
-        if (ctype := response.headers.get('Content-Type')) is not None:
-            major_type, subtype, suffix = _parse_content_type(ctype)
+            if (ctype := response.headers.get('Content-Type')) is not None:
+                major_type, subtype, suffix = _parse_content_type(ctype)
 
-        # TODO: This should probably play nicer with SUPPORTED_SUFFIXES
-        parse_type = ''
-        if subtype == 'json' or suffix == 'json':
-            parse_type = '.json'
-        elif subtype in ('yaml', 'x-yaml') or suffix in ('yaml', 'x-yaml'):
-            parse_type = '.yaml'
-        else:
-            p = jschon.URI(url).path
-            if p.endswith('.json'):
+            # TODO: This should probably play nicer with SUPPORTED_SUFFIXES
+            parse_type = ''
+            if subtype == 'json' or suffix == 'json':
                 parse_type = '.json'
-            elif p.endswith('.yaml') or p.endswith('.yml'):
+            elif subtype in ('yaml', 'x-yaml') or suffix in ('yaml', 'x-yaml'):
                 parse_type = '.yaml'
+            else:
+                p = jschon.URI(url).path
+                if p.endswith('.json'):
+                    parse_type = '.json'
+                elif p.endswith('.yaml') or p.endswith('.yml'):
+                    parse_type = '.yaml'
 
-        content = next(response.iter_content(chunk_size=None))
-        return LoadedContent(
-            content=content,
-            url=url,
-            parse_type=parse_type,
-        )
+            content = next(response.iter_content(chunk_size=None))
+            return LoadedContent(
+                content=content,
+                url=url,
+                parse_type=parse_type,
+            )
+        except requests.RequestException as e:
+            raise CatalogError(str(e)) from e
 
 
 class ContentParser:
@@ -279,16 +282,12 @@ class ContentParser:
             try:
                 return loader.load(location)
             except CatalogError as e:
-                errors.append(e)
+                errors.append((f'{loader.__module__}.{loader.__name__}', e))
 
-        if len(errors) == 1:
-            raise errors[0]
-
-        # TODO: This could be better
-        raise CatalogError(
-            f'Could not load from {location!r}, errors:\n\t' +
-            '\n\t'.join([str(err) for err in errors]),
-        )
+        msg = 'Unable to load "{location"}, tried:\n'
+        for e in errors:
+            msg += f'\t{e[0]}: {e[1]}\n'
+        raise CatalogError(msg)
 
 
 class OASSource(Source):
