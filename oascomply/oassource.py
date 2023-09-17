@@ -284,7 +284,7 @@ class ContentParser:
             except CatalogError as e:
                 errors.append((f'{loader.__module__}.{loader.__name__}', e))
 
-        msg = 'Unable to load "{location"}, tried:\n'
+        msg = f'Unable to load "{location}", tried:\n'
         for e in errors:
             msg += f'\t{e[0]}: {e[1]}\n'
         raise CatalogError(msg)
