@@ -53,6 +53,7 @@ _oascomply_logger.addHandler(_log_handler)
 
 catalog = jschon.create_catalog(
     '2020-12',
+    '2019-09',
     name='oascomply',
     resolve_references=False,
 )
