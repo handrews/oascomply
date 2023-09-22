@@ -30,6 +30,9 @@ from oascomply.resource import OASResourceManager
 logger = logging.getLogger(__name__)
 
 
+STRIP_SUFFIXES_OPTS = '--local-* or --http-*'
+
+
 DESCRIPTION = f"""
 Evaluates the instance with the schema using the jschon library.
 If no instance is provided the schema is evaluated by its metaschema.
@@ -143,7 +146,10 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     # First parse out the strip suffixes option because it is used
     # to configure how other args are parsed.
     strip_suffixes_parser = argparse.ArgumentParser(add_help=False)
-    add_strip_suffixes_option(strip_suffixes_parser)
+    add_strip_suffixes_option(
+        strip_suffixes_parser,
+        relevant_options=STRIP_SUFFIXES_OPTS,
+    )
     ss_args, remaining_args = strip_suffixes_parser.parse_known_args(
         remaining_args,
     )
@@ -164,7 +170,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         '--local-instance',
         action=ActionStoreLocationToURI.make_action(
             arg_cls=PathToURI,
-            strip_suffixes=(),
+            strip_suffixes=ss_args.strip_suffixes,
         ),
         help='A file location specification for the instance to evaluate',
     )
@@ -257,7 +263,10 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
     )
 
     # Already parsed, but add to include in usage message
-    add_strip_suffixes_option(parser)
+    add_strip_suffixes_option(
+        parser,
+        relevant_options=STRIP_SUFFIXES_OPTS,
+    )
     parser.add_argument(
         '-d',
         '--directory',

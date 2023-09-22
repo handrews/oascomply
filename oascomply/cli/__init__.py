@@ -33,18 +33,22 @@ def add_verbose_option(parser):
     )
 
 
-def add_strip_suffixes_option(parser):
+def add_strip_suffixes_option(parser, relevant_options='-f or -u'):
+    help_text = (
+        f"For documents loaded with {relevant_options} without an explict URI "
+        "assigned on the command line, assign a URI by stripping any "
+        "of the given suffixes from the document's URL; passing this "
+        "option without any suffixes disables this behavior, treating "
+        "the unmodified URL as the URI; the default stripped suffixes "
+        "are .json, .yaml, .yml"
+    )
+
     parser.add_argument(
         '-x',
         '--strip-suffixes',
         nargs='*',
         default=DEFAULT_SUFFIXES,
-        help="For documents loaded with -f or -u without an explict URI "
-            "assigned on the command line, assign a URI by stripping any "
-            "of the given suffixes from the document's URL; passing this "
-            "option without any suffixes disables this behavior, treating "
-            "the unmodified URL as the URI; the default stripped suffixes "
-            "are .json, .yaml, .yml",
+        help=help_text,
     )
 
 
