@@ -90,4 +90,4 @@ def test_direct_map(mapping):
             dm.resolve_resource(str(uri))
             last = str(location).split('/')[-1]
             suffix = last[last.rindex('.'):] if '.' in last else ''
-            assert mock_parse.mock_calls == [mock.call(location, suffix)]
+            assert mock_parse.mock_calls == [mock.call(str(location), suffix)]

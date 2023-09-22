@@ -430,22 +430,23 @@ class MultiSuffixSource(OASSource):
         logger.debug(
             f'Checking "{no_suffix_path}" with suffixes {self._suffixes}',
         )
+        errors = []
         for suffix in self._suffixes:
             full_path = no_suffix_path + suffix
             try:
                 return self._parser.parse(full_path, suffix)
-            except FileNotFoundError:
-                pass
+            except CatalogError as e:
+                errors.append((suffix, e))
             except KeyError as e:
                 logger.warning(
                     f'Unsupported suffix {suffix!r} while loading '
                     f'from "{full_path}"',
                 )
 
-        raise CatalogError(
-            f"Could not find '{no_suffix_path}', "
-            f"checked extensions {self._suffixes}"
-        )
+        msg = f"Could not find '{no_suffix_path}' with any extension, tried:"
+        for e in errors:
+            msg += f'\t{e[0]}: {e[1]}\n'
+        raise CatalogError(msg)
 
 
 class FileMultiSuffixSource(MultiSuffixSource, FileLoader):
