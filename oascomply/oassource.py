@@ -215,7 +215,7 @@ class ContentParser:
                 sourcemap = jmap.calculate(content)
             return ParsedContent(
                 value=data,
-                url=pathlib.Path(full_path).as_uri(),
+                url=loaded.url,
                 sourcemap=sourcemap,
             )
         except json.JSONDecodeError as e:
@@ -438,6 +438,7 @@ class MultiSuffixSource(OASSource):
             except CatalogError as e:
                 errors.append((suffix, e))
             except KeyError as e:
+                errors.append((suffix, e))
                 logger.warning(
                     f'Unsupported suffix {suffix!r} while loading '
                     f'from "{full_path}"',
@@ -507,7 +508,7 @@ class DirectMapSource(OASSource):
                 suffix = loc_str[loc_str.rindex('.'):]
             else:
                 suffix = ''
-        logger.debug(f"Requesting parse('{location}', '{suffix}')")
+        logger.debug(f"Requesting parse('{location}', content_info='{suffix}')")
         return self._parser.parse(loc_str, suffix)
 
     @classmethod
