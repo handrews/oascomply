@@ -188,6 +188,8 @@ class LocationToURI:
     def _strip_suffixes(self, location: Any) -> str:
         location_string = str(location)
         for suffix in self._to_strip:
+            if suffix == '':
+                return location_string
             if location_string.endswith(suffix):
                 return location_string[:-len(suffix)]
         return location_string
