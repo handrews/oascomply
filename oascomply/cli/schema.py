@@ -5,6 +5,7 @@ import json
 from typing import Mapping, Sequence
 
 import yaml
+import toml
 from jschon import JSONSchema
 from jschon.resource import JSONResource
 
@@ -294,7 +295,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         dest='dir_suffixes',
         help="The list of suffixes to search, in order, when resolving using "
              "any directory prefix specification; files that do not fit the "
-             "suffix pattern of the directory should be loaded with -f.",
+             "suffix pattern of the directory should be loaded with -r.",
     )
     parser.add_argument(
         '-P',
@@ -304,7 +305,7 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
         dest='url_suffixes',
         help="The list of suffixes to search, in order, when resolving using "
              "any URL prefix specification; resources that do not fit the "
-             "suffix pattern of the URL prefix should be loaded with -u.",
+             "suffix pattern of the URL prefix should be loaded with -R.",
     )
 
     output_group = parser.add_mutually_exclusive_group()
@@ -330,6 +331,13 @@ def parse_non_logging(remaining_args: Sequence[str]) -> argparse.Namespace:
              'the "basic" format; this option cannot be combined with -a',
     )
 
+    parser.add_argument(
+        '-f',
+        '--output-format',
+        choices=('json', 'yaml', 'toml'),
+        default='json',
+        help='The serialization format for output',
+    )
     parser.add_argument(
         '-e',
         '--error-format',
@@ -406,7 +414,6 @@ def evaluate(args):
             metaschema_uri=
                 None if metaschema_spec is None else metaschema_spec.uri,
     )
-    oascomply.catalog.resolve_references()
 
     if args.dump_catalog:
         yaml.dump(
@@ -420,6 +427,8 @@ def evaluate(args):
         # TODO: don't sys.exit() from anywhere but run()?
         sys.exit()
 
+    oascomply.catalog.resolve_references()
+
     result = (
         schema.validate() if instance is None
         else schema.evaluate(instance)
@@ -432,15 +441,38 @@ def evaluate(args):
     )
 
 
-def print_output(output):
-    json.dump(
-        output,
-        sys.stdout,
-        indent=2,
-        ensure_ascii=False,
-    )
-    # json.dump() does not include a trailing newline
-    print(flush=True)
+import pygments
+import pygments.lexers
+import pygments.formatters
+OUTPUT_FORMAT_LEXERS = {
+    'json': pygments.lexers.JsonLexer,
+    'yaml': pygments.lexers.YamlLexer,
+    'toml': pygments.lexers.TOMLLexer,
+}
+def colorize(
+    data: str,
+    fmt: str,
+    style: str = 'solarized-dark',
+) -> str:
+    if (lexer_cls := OUTPUT_FORMAT_LEXERS.get(fmt)) is not None:
+        data = pygments.highlight(
+            data,
+            lexer=lexer_cls(),
+            formatter=pygments.formatters.Terminal256Formatter(
+                style=style,
+            ),
+        )
+    return data
+
+
+def print_output(output, fmt='json'):
+    if fmt == 'json':
+        data = json.dumps(output, indent=2, ensure_ascii=False)
+    elif fmt == 'yaml':
+        data = yaml.dump(output, indent=2, allow_unicode=True, sort_keys=False)
+    elif fmt == 'toml':
+        data = toml.dumps(output)
+    print(colorize(data, fmt=fmt))
 
 
 def run():
@@ -454,7 +486,13 @@ def run():
         sys.exit(-1)
 
     if args.annotations:
-        print_output(result.output('basic', annotations=args.annotations))
+        print_output(
+            result.output('basic', annotations=args.annotations),
+            fmt=args.output_format,
+        )
     elif output_format is not None:
-        print_output(result.output(output_format))
+        print_output(
+            result.output(output_format),
+            fmt=args.output_format,
+        )
     print('Validation successful!', file=sys.stderr)
